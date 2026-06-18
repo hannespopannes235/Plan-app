@@ -8,7 +8,7 @@ Plan nutzt **PocketBase** als Backend – ein einziges, sehr sparsames Programm,
 das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
 **einem Docker-Container** auf deinem NAS. Es werden keine Cloud-Dienste benötigt.
 
-> ⏱️ Zeitaufwand: ca. 30 Minuten. Du brauchst keinen Programmier-Hintergrund –
+> ⏱️ Zeitaufwand: ca. 30–40 Minuten. Du brauchst keinen Programmier-Hintergrund –
 > nur Kopieren, Einfügen und Klicken.
 
 ---
@@ -17,7 +17,7 @@ das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
 
 1. [Was du brauchst](#1-was-du-brauchst)
 2. [Projektdateien auf den NAS laden](#2-projektdateien-auf-den-nas-laden)
-3. [App im Container Manager starten](#3-app-im-container-manager-starten)
+3. [SSH aktivieren und App starten](#3-ssh-aktivieren-und-app-starten)
 4. [Erste Einrichtung (Admin-Konto)](#4-erste-einrichtung-admin-konto)
 5. [App im Browser öffnen & dein Konto anlegen](#5-app-im-browser-öffnen--dein-konto-anlegen)
 6. [Auf dem Handy installieren](#6-auf-dem-handy-installieren)
@@ -32,27 +32,39 @@ das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
 
 ## 1. Was du brauchst
 
-- Eine **Synology DS218+** mit **DSM 7.2** oder neuer (oben rechts → ⓘ zeigt die Version).
-- Das Paket **Container Manager** (gibt es kostenlos im **Paket-Zentrum**).
+- Eine **Synology DS218+** mit **DSM 7.1.1** (Version oben rechts → ⓘ prüfen).
+- Das Paket **Docker** aus dem **Paket-Zentrum** (kostenlos, dazu gleich mehr).
 - Die **Projektdateien** von Plan (dieser Ordner / dieses Repository).
 - Einen Computer im selben Netzwerk wie das NAS.
 
-> 💡 Die DS218+ hat 2 GB RAM – das reicht für PocketBase locker.
+> 💡 Die DS218+ hat 2 GB RAM – das reicht für PocketBase locker aus.
+
+> ℹ️ **DSM 7.1.1 nutzt das Paket „Docker"** (nicht „Container Manager", das erst
+> ab DSM 7.2 verfügbar ist). Die Bedienung unterscheidet sich etwas, funktioniert
+> aber genauso gut.
 
 ---
 
 ## 2. Projektdateien auf den NAS laden
 
+### 2a. Docker-Paket installieren
+
 1. Öffne **DSM** (die Weboberfläche deiner Synology) im Browser.
-2. Starte die **File Station**.
-3. Falls noch nicht vorhanden, lege im Bereich oben einen freigegebenen Ordner
-   namens **`docker`** an (Container Manager nutzt ihn standardmäßig).
-4. Erstelle darin einen Ordner **`plan`**. Der vollständige Pfad ist dann:
+2. Starte das **Paket-Zentrum** (das blaue Einkaufskorb-Symbol).
+3. Suche nach **Docker**, klicke auf das Paket und dann auf **Installieren**.
+4. Warte bis die Installation abgeschlossen ist (~1 Min.).
+
+### 2b. Projektordner anlegen und Dateien hochladen
+
+1. Starte die **File Station** in DSM.
+2. Falls noch nicht vorhanden, lege einen freigegebenen Ordner **`docker`** an
+   (Klick auf das **+**-Symbol ganz oben links in der Ordnerliste).
+3. Erstelle darin einen Unterordner **`plan`**. Der vollständige Pfad ist dann:
    ```
    /volume1/docker/plan
    ```
-5. Lade **den kompletten Inhalt dieses Projekts** in diesen Ordner hoch
-   (per File Station → „Hochladen", oder bequemer per Drag & Drop).
+4. Lade **den kompletten Inhalt dieses Projekts** in diesen Ordner hoch
+   (File Station → Ordner `plan` öffnen → oben **Hochladen** → Dateien auswählen).
 
    Wichtig sind v. a. diese Dateien/Ordner:
    ```
@@ -60,41 +72,101 @@ das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
    ├── Dockerfile
    ├── docker-compose.yml
    ├── package.json
-   ├── src/  …  (die App)
+   ├── src/             (die App)
    ├── pb_migrations/   (Datenbank-Schema)
    └── pb_hooks/        (Server-Logik + Kalender)
    ```
 
-> 🧑‍💻 **Schneller per Git (optional):** Wer mag, kann sich per SSH aufs NAS
-> verbinden und `git clone <repo-url> /volume1/docker/plan` ausführen. Für die
+> 🧑‍💻 **Schneller per Git (optional):** Wer SSH hat (nächster Abschnitt), kann
+> direkt `git clone <repo-url> /volume1/docker/plan` ausführen. Für die
 > Anleitung ist das nicht nötig.
 
 ---
 
-## 3. App im Container Manager starten
+## 3. SSH aktivieren und App starten
 
-1. Öffne in DSM den **Container Manager**.
-2. Gehe links auf **Projekt** und klicke **Erstellen**.
-3. Fülle aus:
-   - **Projektname:** `plan`
-   - **Pfad:** klicke **Durchsuchen** und wähle `/volume1/docker/plan`.
-   - **Quelle:** „docker-compose.yml verwenden" (wird automatisch erkannt).
-4. Klicke **Weiter** und bestätige, bis der Bau startet.
-5. Jetzt baut das NAS die App. **Das dauert beim ersten Mal 3–8 Minuten** –
-   im Protokoll-Fenster läuft Text durch. Das ist normal.
-6. Fertig, wenn im Protokoll steht:
-   ```
-   Server started at http://0.0.0.0:8090
-   ```
+Die App wird über die **Kommandozeile (SSH)** gestartet – das klingt technisch,
+ist aber eine Sache von wenigen Befehlen. Folge einfach den Schritten.
 
-> ✅ **Geschafft, wenn der Container „läuft"/„running" anzeigt.**
-> Falls der Bau abbricht, schau in [Problembehebung](#12-problembehebung).
+### 3a. SSH in DSM aktivieren
+
+1. DSM → **Systemsteuerung** → **Terminal & SNMP**.
+2. Häkchen bei **SSH-Dienst aktivieren** setzen. Port bleibt auf `22`.
+3. Auf **Anwenden** klicken.
+
+### 3b. SSH-Verbindung öffnen
+
+**Auf dem Mac / Linux:**
+1. Öffne das Programm **Terminal** (Spotlight → „Terminal").
+2. Tippe folgenden Befehl ein (ersetze `NAS-IP` durch die IP deines NAS):
+   ```
+   ssh admin@NAS-IP
+   ```
+   z. B. `ssh admin@192.168.1.50`
+3. Bestätige mit `yes`, wenn du gefragt wirst, ob du verbinden willst.
+4. Gib dein **DSM-Passwort** ein (du siehst keine Zeichen beim Tippen – das ist normal).
+
+**Auf Windows:**
+1. Öffne **PowerShell** oder **Eingabeaufforderung** (Windows-Taste → suche „PowerShell").
+2. Tippe:
+   ```
+   ssh admin@NAS-IP
+   ```
+   z. B. `ssh admin@192.168.1.50`
+3. Bestätige mit `yes` und gib dein DSM-Passwort ein.
+
+> ℹ️ Funktioniert das nicht, weil `ssh` nicht gefunden wird? Installiere
+> **PuTTY** (putty.org), trage dort die NAS-IP ein und klicke „Open".
+
+**Ergebnis:** Du siehst eine Zeile wie `admin@DiskStation:~$` – du bist drin.
+
+### 3c. App bauen und starten
+
+Gib diese Befehle **nacheinander** ein und drücke nach jedem Enter:
+
+```bash
+sudo -i
+```
+*(Gibt dir Admin-Rechte; dein DSM-Passwort wird nochmals abgefragt.)*
+
+```bash
+cd /volume1/docker/plan
+```
+*(Wechselt in den Projektordner.)*
+
+```bash
+docker-compose up -d --build
+```
+*(Baut die App und startet den Container im Hintergrund.)*
+
+**Das dauert beim ersten Mal 5–15 Minuten** – Docker lädt Pakete herunter und
+baut die App. Die Ausgabe zeigt laufend Fortschritt. Am Ende erscheint:
+
+```
+Creating plan ... done
+```
+
+Warte auf diese Zeile, dann ist alles fertig.
+
+### 3d. Läuft der Container?
+
+Prüfe es mit:
+```bash
+docker ps
+```
+Du siehst eine Zeile mit `plan` und dem Status **Up** – alles gut!
+
+Den Container-Status siehst du auch in DSM unter **Docker** (das Programm aus
+dem Paket-Zentrum) → Reiter **Container** → dort steht `plan` mit grünem Punkt.
+
+> ✅ **Fertig!** Du kannst das SSH-Fenster jetzt schließen. Der Container läuft
+> weiter, auch nach einem NAS-Neustart.
 
 ---
 
 ## 4. Erste Einrichtung (Admin-Konto)
 
-PocketBase braucht einmalig ein **Administrator-Konto** (das ist die „Hausmeister"-
+PocketBase braucht einmalig ein **Administrator-Konto** (das ist der „Hausmeister"-
 Zugang für die Datenbank – nicht dein normales App-Konto).
 
 1. Öffne im Browser:
@@ -102,7 +174,7 @@ Zugang für die Datenbank – nicht dein normales App-Konto).
    http://NAS-IP:8090/_/
    ```
    Ersetze `NAS-IP` durch die Adresse deines NAS, z. B. `http://192.168.1.50:8090/_/`.
-   (Die IP findest du in DSM unter Systemsteuerung → Netzwerk, oder in deinem Router.)
+   (Die IP findest du in DSM unter Systemsteuerung → Info-Center, oder in deinem Router.)
 2. Lege beim ersten Aufruf **E-Mail + Passwort** für den Admin fest. **Gut merken!**
 3. Das Datenbank-Schema (Einkaufslisten, Aufgaben, …) wird **automatisch** angelegt –
    du musst hier nichts weiter einstellen.
@@ -240,29 +312,59 @@ So sicherst du ihn automatisch:
 ## 11. Updates einspielen
 
 Wenn es eine neue Version von Plan gibt:
+
 1. Neue Projektdateien nach `/volume1/docker/plan` hochladen
-   (bzw. `git pull`, falls per Git geholt).
-2. Container Manager → Projekt **plan** → **Erstellen / Build** (Image neu bauen).
-3. Der Container startet automatisch neu. Deine Daten in `pb_data` bleiben erhalten.
+   (via File Station, oder per SSH: `git pull`).
+2. Per SSH verbinden (wie in Abschnitt 3b beschrieben) und diese Befehle eingeben:
+   ```bash
+   sudo -i
+   cd /volume1/docker/plan
+   docker-compose up -d --build
+   ```
+3. Docker baut das neue Image und startet den Container neu.
+   Deine Daten in `pb_data` bleiben vollständig erhalten.
 
 ---
 
 ## 12. Problembehebung
 
-**Der Bau (Build) bricht ab / „failed".**
-Meist zu wenig Arbeitsspeicher beim Bauen. Schließe andere DSM-Pakete kurz oder
-versuche den Build erneut. Notfalls die App auf dem PC bauen (`npm install`,
-`npm run build`) und den Ordner `dist` mit hochladen – dann den `Dockerfile`-
-Build-Schritt überspringen (frag gern nach, ich helfe beim Anpassen).
+**Docker nicht im Paket-Zentrum zu finden.**
+Suche genau nach „Docker" (mit großem D). Falls nicht verfügbar: DSM-Version
+prüfen (DSM 7.x sollte Docker unterstützen), oder DSM aktualisieren.
+
+**`docker-compose` Befehl nicht gefunden (nach `sudo -i`).**
+Das Docker-Paket installiert `docker-compose` normalerweise automatisch. Falls nicht:
+```bash
+docker compose up -d --build
+```
+(ohne Bindestrich – neuere Docker-Versionen nutzen `docker compose` statt `docker-compose`).
+
+**Der Bau (Build) bricht ab / läuft sehr lange.**
+Meist zu wenig Arbeitsspeicher beim Bauen. Schließe andere DSM-Pakete kurz.
+Notfalls die App auf dem PC bauen und das fertige `dist`-Verzeichnis mitliefern:
+```bash
+# auf dem PC (nicht dem NAS):
+npm install && npm run build
+# dann dist/ auf /volume1/docker/plan/dist hochladen
+```
+Melde dich, wenn du Hilfe beim Anpassen brauchst.
 
 **Seite nicht erreichbar unter `:8090`.**
-- Läuft der Container? Container Manager → Container sollte „running" zeigen.
+- Läuft der Container? DSM → **Docker** → **Container** → `plan` sollte grün sein.
 - Richtige NAS-IP benutzt? In DSM unter Systemsteuerung → Info-Center prüfen.
-- Anderer Dienst belegt Port 8090? In `docker-compose.yml` z. B. auf `8095:8090`
-  ändern und neu bauen; dann `http://NAS-IP:8095` nutzen.
+- Anderer Dienst belegt Port 8090? In `docker-compose.yml` den Port auf z. B.
+  `8095:8090` ändern und neu bauen; dann `http://NAS-IP:8095` nutzen.
 
-**„Server started" steht nicht im Protokoll / Fehler beim Start.**
-Schau im Container-Protokoll nach der ersten roten Zeile. Wenn dort etwas zu
+**Protokoll/Logs anschauen.**
+Entweder in DSM → Docker → Container → `plan` → Reiter **Protokoll**, oder
+per SSH:
+```bash
+docker logs plan
+```
+Wenn dort etwas zu „migration" steht, kopiere mir die Meldung.
+
+**„Server started" erscheint nicht im Protokoll / Fehler beim Start.**
+Schau nach der ersten roten Zeile im Protokoll. Wenn dort etwas zu
 „migration" steht, kopiere mir die Meldung – das Schema lässt sich schnell anpassen.
 
 **Änderungen erscheinen nicht sofort auf anderen Geräten (Echtzeit).**

@@ -25,10 +25,16 @@ auf dem **Handy** – findest du hier:
 
 Kurzfassung (ein Container auf dem NAS, der App + Backend ausliefert):
 
-1. Projektordner nach `/volume1/docker/plan` auf das NAS kopieren.
-2. **Container Manager → Projekt → Erstellen** mit Pfad `/volume1/docker/plan`.
-3. `http://NAS-IP:8090/_/` öffnen, Admin-Konto anlegen (Schema wird automatisch erstellt).
-4. `http://NAS-IP:8090` öffnen, registrieren, Haushalt anlegen, loslegen.
+1. Projektordner nach `/volume1/docker/plan` auf das NAS kopieren (File Station).
+2. **Docker-Paket** aus dem Paket-Zentrum installieren, SSH aktivieren (DSM → Systemsteuerung → Terminal & SNMP).
+3. Per SSH verbinden und ausführen:
+   ```bash
+   sudo -i
+   cd /volume1/docker/plan
+   docker-compose up -d --build
+   ```
+4. `http://NAS-IP:8090/_/` öffnen, Admin-Konto anlegen (Schema wird automatisch erstellt).
+5. `http://NAS-IP:8090` öffnen, registrieren, Haushalt anlegen, loslegen.
 
 ---
 
