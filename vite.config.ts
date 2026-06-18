@@ -42,14 +42,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-        navigateFallbackDenylist: [/^\/functions\//],
+        // Diese Pfade gehören PocketBase (API, Admin-UI, Kalender-Feed) und
+        // dürfen nicht vom SPA-Fallback (index.html) abgefangen werden.
+        navigateFallbackDenylist: [/^\/api\//, /^\/_\//, /^\/ics\//],
         runtimeCaching: [
           {
-            // Supabase REST/Realtime – immer Netzwerk zuerst, Cache als Fallback
-            urlPattern: ({ url }) => url.pathname.startsWith("/rest/"),
+            // PocketBase-API – immer Netzwerk zuerst, Cache nur als Fallback.
+            // Der Realtime-Stream (/api/realtime) wird bewusst NICHT gecacht.
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith("/api/") && url.pathname !== "/api/realtime",
             handler: "NetworkFirst",
             options: {
-              cacheName: "supabase-rest",
+              cacheName: "pocketbase-api",
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
             },
