@@ -134,6 +134,14 @@ cd /volume1/docker/plan
 ```
 *(Wechselt in den Projektordner.)*
 
+> ⚠️ **Wichtig:** Prüfe mit `ls`, dass hier die Datei `docker-compose.yml` liegt.
+> Beim Hochladen landen die Dateien oft versehentlich in einem **Unterordner**
+> (z. B. `Plan-app-main`). Steht in der Liste nur ein Ordnername statt der
+> Projektdateien, wechsle hinein, bevor du weitermachst:
+> ```bash
+> cd /volume1/docker/plan/Plan-app-main   # Name an deine Ausgabe anpassen
+> ```
+
 ```bash
 docker-compose up -d --build
 ```
