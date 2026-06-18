@@ -143,6 +143,12 @@ cd /volume1/docker/plan
 > ```
 
 ```bash
+mkdir -p pb_data
+```
+*(Legt den Daten-Ordner an. Docker auf der Synology erstellt ihn nicht von selbst –
+ohne diesen Schritt bricht der Start mit „Bind mount failed … does not exists" ab.)*
+
+```bash
 docker-compose up -d --build
 ```
 *(Baut die App und startet den Container im Hintergrund.)*
@@ -356,6 +362,15 @@ npm install && npm run build
 # dann dist/ auf /volume1/docker/plan/dist hochladen
 ```
 Melde dich, wenn du Hilfe beim Anpassen brauchst.
+
+**„Bind mount failed: '/volume1/docker/plan/pb_data' does not exists".**
+Docker auf der Synology legt den Daten-Ordner nicht automatisch an. Einmalig
+erstellen und neu starten:
+```bash
+cd /volume1/docker/plan
+mkdir -p pb_data
+docker-compose up -d --build
+```
 
 **Seite nicht erreichbar unter `:8090`.**
 - Läuft der Container? DSM → **Docker** → **Container** → `plan` sollte grün sein.
