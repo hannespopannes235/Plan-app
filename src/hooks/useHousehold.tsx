@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
+import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import type { Household, HouseholdMember, Profile } from "@/types/database";
 
@@ -10,7 +10,7 @@ interface HouseholdContextValue {
   activeId: string | null;
   setActiveId: (id: string) => void;
   members: HouseholdMember[];
-  /** user_id → Profile, inkl. eigenem Profil und allen Mitgliedern. */
+  /** user_id → Profile (eigenes Profil + alle Mitglieder). */
   profiles: Record<string, Profile>;
   myRole: string | null;
   loading: boolean;
@@ -23,7 +23,6 @@ const ACTIVE_KEY = "plan-active-household";
 
 export function HouseholdProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const [activeId, setActiveIdState] = useState<string | null>(
     () => localStorage.getItem(ACTIVE_KEY),
   );
@@ -32,12 +31,7 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
     queryKey: ["households", user?.id],
     enabled: !!user,
     queryFn: async (): Promise<Household[]> => {
-      const { data, error } = await supabase
-        .from("households")
-        .select("*")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+      return pb.collection("households").getFullList<Household>({ sort: "created" });
     },
   });
 
@@ -63,23 +57,25 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
     queryKey: ["members", activeId],
     enabled: !!activeId,
     queryFn: async (): Promise<{ members: HouseholdMember[]; profiles: Profile[] }> => {
-      const { data: members, error } = await supabase
-        .from("household_members")
-        .select("*")
-        .eq("household_id", activeId!);
-      if (error) throw error;
-
-      const ids = (members ?? []).map((m) => m.user_id);
-      let profiles: Profile[] = [];
-      if (ids.length > 0) {
-        const { data: profs, error: pErr } = await supabase
-          .from("profiles")
-          .select("*")
-          .in("id", ids);
-        if (pErr) throw pErr;
-        profiles = profs ?? [];
+      const records = await pb.collection("household_members").getFullList<
+        HouseholdMember & { expand?: { user_id?: Profile } }
+      >({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        expand: "user_id",
+      });
+      const profiles: Profile[] = [];
+      for (const m of records) {
+        const u = m.expand?.user_id;
+        if (u) {
+          profiles.push({
+            id: u.id,
+            display_name: u.display_name || "Mitglied",
+            color: u.color || "#f59e0b",
+            avatar_emoji: u.avatar_emoji || "🙂",
+          });
+        }
       }
-      return { members: members ?? [], profiles };
+      return { members: records, profiles };
     },
   });
 
@@ -96,18 +92,21 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
   // Realtime: Mitgliederänderungen sofort übernehmen
   useEffect(() => {
     if (!activeId) return;
-    const channel = supabase
-      .channel(`members-${activeId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "household_members", filter: `household_id=eq.${activeId}` },
-        () => queryClient.invalidateQueries({ queryKey: ["members", activeId] }),
-      )
-      .subscribe();
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    pb.collection("household_members")
+      .subscribe("*", () => membersQuery.refetch())
+      .then((u) => {
+        if (cancelled) u();
+        else unsubscribe = u;
+      })
+      .catch(() => {});
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
     };
-  }, [activeId, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
 
   return (
     <HouseholdContext.Provider

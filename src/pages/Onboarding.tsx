@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Home, Users, LogOut } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useToast } from "@/components/ui/toast";
+import { randomToken } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Spinner } from "@/components/common";
 
 export function Onboarding() {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { refetchHouseholds, setActiveId } = useHousehold();
   const { toast } = useToast();
   const [householdName, setHouseholdName] = useState("");
@@ -20,11 +21,20 @@ export function Onboarding() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setBusy("create");
     try {
-      const { data, error } = await supabase.rpc("create_household", { p_name: householdName.trim() });
-      if (error) throw error;
-      if (data) setActiveId((data as { id: string }).id);
+      const household = await pb.collection("households").create({
+        name: householdName.trim(),
+        created_by: user.id,
+        ics_token: randomToken(),
+      });
+      await pb.collection("household_members").create({
+        household_id: household.id,
+        user_id: user.id,
+        role: "owner",
+      });
+      setActiveId(household.id);
       await refetchHouseholds();
       toast({ title: "Haushalt erstellt 🎉", variant: "success" });
     } catch (err) {
@@ -42,15 +52,17 @@ export function Onboarding() {
     e.preventDefault();
     setBusy("join");
     try {
-      const { data, error } = await supabase.rpc("redeem_invite", { p_code: code.trim() });
-      if (error) throw error;
-      if (data) setActiveId((data as { id: string }).id);
+      const res = await pb.send<{ household_id: string }>("/api/plan/redeem-invite", {
+        method: "POST",
+        body: { code: code.trim() },
+      });
+      if (res?.household_id) setActiveId(res.household_id);
       await refetchHouseholds();
       toast({ title: "Willkommen im Haushalt! 👋", variant: "success" });
-    } catch (err) {
+    } catch (err: any) {
       toast({
         title: "Beitritt fehlgeschlagen",
-        description: err instanceof Error ? err.message : undefined,
+        description: err?.response?.message || err?.message || "Code prüfen.",
         variant: "error",
       });
     } finally {

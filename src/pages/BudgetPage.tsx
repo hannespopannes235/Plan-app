@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useRealtimeTable } from "@/hooks/useRealtime";
@@ -77,21 +77,16 @@ function ExpensesTab() {
   const txQuery = useQuery({
     queryKey: key,
     enabled: !!activeId,
-    queryFn: async (): Promise<Transaction[]> => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("household_id", activeId!)
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map((t) => ({ ...t, amount: Number(t.amount) }));
-    },
+    queryFn: async (): Promise<Transaction[]> =>
+      pb.collection("transactions").getFullList<Transaction>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "-date",
+      }),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("transactions").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("transactions").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
@@ -278,15 +273,14 @@ function ExpenseDialog() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("transactions").insert({
+      await pb.collection("transactions").create({
         household_id: activeId,
         description: description.trim(),
         amount: Number(amount.replace(",", ".")),
         category,
-        paid_by: paidBy === "none" ? null : paidBy,
+        paid_by: paidBy === "none" ? "" : paidBy,
         date,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions", activeId] });
@@ -403,21 +397,16 @@ function BillsTab() {
   const billsQuery = useQuery({
     queryKey: key,
     enabled: !!activeId,
-    queryFn: async (): Promise<RecurringBill[]> => {
-      const { data, error } = await supabase
-        .from("recurring_bills")
-        .select("*")
-        .eq("household_id", activeId!)
-        .order("next_due_date");
-      if (error) throw error;
-      return (data ?? []).map((b) => ({ ...b, amount: Number(b.amount) }));
-    },
+    queryFn: async (): Promise<RecurringBill[]> =>
+      pb.collection("recurring_bills").getFullList<RecurringBill>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "next_due_date",
+      }),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("recurring_bills").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("recurring_bills").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
@@ -538,15 +527,15 @@ function BillDialog() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("recurring_bills").insert({
+      await pb.collection("recurring_bills").create({
         household_id: activeId,
         name: name.trim(),
         amount: Number(amount.replace(",", ".")),
         category,
         recurrence,
         next_due_date: nextDue,
+        reminder_days: 3,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["recurring_bills", activeId] });

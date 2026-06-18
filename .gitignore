@@ -35,3 +35,7 @@ dist-ssr
 .branches
 .temp
 supabase/.temp
+
+# tsc -b Artefakte
+vite.config.js
+vite.config.d.ts

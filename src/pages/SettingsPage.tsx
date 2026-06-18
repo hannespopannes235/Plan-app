@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Check, LogOut, UserPlus, Plus, Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useToast } from "@/components/ui/toast";
@@ -38,11 +38,13 @@ export function SettingsPage() {
 
   const saveProfile = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ display_name: name.trim(), color, avatar_emoji: emoji })
-        .eq("id", user!.id);
-      if (error) throw error;
+      await pb.collection("users").update(user!.id, {
+        display_name: name.trim(),
+        color,
+        avatar_emoji: emoji,
+      });
+      // AuthStore aktualisieren, damit Begrüßung/Avatar sofort stimmen
+      await pb.collection("users").authRefresh();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members", activeId] });
@@ -54,25 +56,21 @@ export function SettingsPage() {
   const invitesQuery = useQuery({
     queryKey: ["invites", activeId],
     enabled: !!activeId,
-    queryFn: async (): Promise<Invite[]> => {
-      const { data, error } = await supabase
-        .from("invites")
-        .select("*")
-        .eq("household_id", activeId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<Invite[]> =>
+      pb.collection("invites").getFullList<Invite>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "-created",
+      }),
   });
 
   const createInvite = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("invites").insert({
+      await pb.collection("invites").create({
         household_id: activeId,
         code: randomInviteCode(),
         created_by: user!.id,
+        expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
       });
-      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["invites", activeId] }),
     onError: (e) => toast({ title: "Fehler", description: String(e), variant: "error" }),
@@ -80,20 +78,17 @@ export function SettingsPage() {
 
   const deleteInvite = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("invites").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("invites").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["invites", activeId] }),
   });
 
   const leaveHousehold = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("household_members")
-        .delete()
-        .eq("household_id", activeId)
-        .eq("user_id", user!.id);
-      if (error) throw error;
+      const membership = await pb
+        .collection("household_members")
+        .getFirstListItem(pb.filter("household_id = {:h} && user_id = {:u}", { h: activeId, u: user!.id }));
+      await pb.collection("household_members").delete(membership.id);
     },
     onSuccess: () => {
       refetchHouseholds();

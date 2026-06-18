@@ -1,14 +1,34 @@
 # 📋 Plan – Familien-Haushalts-App
 
-Eine geräteübergreifende Haushalts-Organizer-App für Familien & WGs mit **Echtzeit-Synchronisation**, **Login** und **strikter Datentrennung pro Haushalt**. Alle Mitglieder teilen dieselben Daten – ändert jemand etwas, sehen es alle sofort.
+Eine geräteübergreifende Haushalts-Organizer-App für Familien & WGs mit
+**Echtzeit-Synchronisation**, **Login** und **strikter Datentrennung pro Haushalt**.
+Alle Mitglieder teilen dieselben Daten – ändert jemand etwas, sehen es alle sofort.
 
-**Funktionen:** Einkaufslisten · Aufgaben/Putzplan · Essensplanung · Budget/Rechnungen · In-App-Kalender mit abonnierbarem `.ics`-Feed.
+**Funktionen:** Einkaufslisten · Aufgaben/Putzplan · Essensplanung · Budget/Rechnungen ·
+In-App-Kalender mit abonnierbarem `.ics`-Feed.
 
 - 🇩🇪 Oberfläche komplett auf Deutsch
 - 🌗 Hell- & Dunkelmodus
 - 📱 PWA – im Browser lauffähig und auf allen Geräten installierbar (mobile-first bis Desktop)
 - ⚡ Echtzeit-Sync über mehrere Geräte
-- 🔒 Row Level Security: jeder Haushalt sieht nur seine eigenen Daten
+- 🔒 Zugriffsregeln pro Haushalt (jeder sieht nur die eigenen Daten)
+- 🏠 Selbst-gehostet auf dem eigenen NAS – keine Cloud nötig
+
+---
+
+## 👉 Installation auf der Synology (für Einsteiger)
+
+Eine ausführliche, bebilderte Schritt-für-Schritt-Anleitung – inkl. Installation
+auf dem **Handy** – findest du hier:
+
+### ➡️ [docs/ANLEITUNG.md](docs/ANLEITUNG.md)
+
+Kurzfassung (ein Container auf dem NAS, der App + Backend ausliefert):
+
+1. Projektordner nach `/volume1/docker/plan` auf das NAS kopieren.
+2. **Container Manager → Projekt → Erstellen** mit Pfad `/volume1/docker/plan`.
+3. `http://NAS-IP:8090/_/` öffnen, Admin-Konto anlegen (Schema wird automatisch erstellt).
+4. `http://NAS-IP:8090` öffnen, registrieren, Haushalt anlegen, loslegen.
 
 ---
 
@@ -18,120 +38,44 @@ Eine geräteübergreifende Haushalts-Organizer-App für Familien & WGs mit **Ech
 |-----------|-------------|
 | Frontend  | React + TypeScript + Vite |
 | Styling   | Tailwind CSS + Radix UI (shadcn-Stil) |
-| Backend   | Supabase – Postgres, Auth, Realtime, RLS, Edge Function |
-| State     | TanStack Query + Supabase-Realtime-Subscriptions (optimistische Updates) |
+| Backend   | **PocketBase** (Go + SQLite): Datenbank, Auth, Realtime, Zugriffsregeln, JS-Hooks |
+| State     | TanStack Query + PocketBase-Realtime-Subscriptions (optimistische Updates) |
 | Diagramme | Recharts |
 | PWA       | `vite-plugin-pwa` |
-| Routing   | React Router |
+| Hosting   | Ein Docker-Container auf Synology (PocketBase serviert API **und** PWA) |
+
+> **Warum PocketBase?** Es ist ein einziges, sehr sparsames Programm (Datenbank +
+> Auth + Realtime + Admin-UI in einem) und damit ideal für ein NAS mit wenig RAM.
+> Ein Container liefert sowohl die API als auch die fertige PWA aus – gleicher
+> Origin, kein CORS, ein Backup-Ordner.
 
 ---
 
-## Schnellstart
+## Lokale Entwicklung
 
-### 1. Supabase-Projekt anlegen
+Voraussetzung: Node 20+ und eine laufende PocketBase-Instanz.
 
-1. Konto auf [supabase.com](https://supabase.com) erstellen und ein neues Projekt anlegen (kostenloser Tarif genügt).
-2. Im Dashboard unter **Project Settings → API** findest du:
-   - **Project URL** → `VITE_SUPABASE_URL`
-   - **anon public key** → `VITE_SUPABASE_ANON_KEY`
-
-### 2. Datenbank-Schema einspielen
-
-Öffne im Supabase-Dashboard den **SQL Editor**, füge den **kompletten Inhalt** von
-[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) ein und führe ihn aus.
-
-Das legt alle Tabellen an, aktiviert **Row Level Security** mit passenden Policies, erstellt
-Hilfsfunktionen (`create_household`, `redeem_invite`, `complete_task`) und aktiviert **Realtime**
-für die relevanten Tabellen.
-
-> Alternativ mit der [Supabase CLI](https://supabase.com/docs/guides/cli):
-> ```bash
-> supabase link --project-ref <dein-ref>
-> supabase db push
-> ```
-
-### 3. E-Mail-Auth konfigurieren
-
-Unter **Authentication → Providers → Email** ist E-Mail/Passwort standardmäßig aktiv.
-- Zum schnellen Ausprobieren kannst du **„Confirm email"** vorübergehend deaktivieren.
-- Unter **Authentication → URL Configuration** die **Site URL** auf `http://localhost:5173`
-  setzen (für Magic-Links / Bestätigungslinks).
-
-### 4. Umgebungsvariablen setzen
+### 1. PocketBase lokal starten
 
 ```bash
-cp .env.example .env
+# PocketBase-Binary von https://pocketbase.io/docs/ herunterladen, dann:
+./pocketbase serve --dir ./pb_data --hooksDir ./pb_hooks --migrationsDir ./pb_migrations
 ```
 
-`.env` öffnen und die beiden Werte aus Schritt 1 eintragen:
+PocketBase läuft nun auf `http://127.0.0.1:8090`. Beim ersten Start unter
+`http://127.0.0.1:8090/_/` ein Admin-Konto anlegen – die Migrationen aus
+`pb_migrations/` legen das Schema automatisch an.
 
-```env
-VITE_SUPABASE_URL=https://dein-projekt.supabase.co
-VITE_SUPABASE_ANON_KEY=dein-anon-key
-```
-
-### 5. Installieren & starten
+### 2. Frontend starten
 
 ```bash
+cp .env.example .env        # VITE_PB_URL=http://127.0.0.1:8090 eintragen
 npm install
-npm run dev
+npm run dev                 # läuft auf http://localhost:5173
 ```
 
-App läuft auf **http://localhost:5173**.
-
----
-
-## Erste Schritte in der App
-
-1. **Registrieren** (E-Mail + Passwort oder Magic-Link).
-2. **Haushalt erstellen** – du wirst Eigentümer:in.
-3. Unter **Einstellungen → Einladen** einen **Einladungs-Code** erzeugen und teilen.
-   Andere registrieren sich und geben den Code beim Onboarding ein → sie teilen jetzt eure Daten.
-4. Profil anpassen (Name, **Farbe & Avatar**), damit auf einen Blick erkennbar ist, wem was gehört.
-5. Loslegen: Einkaufslisten, Aufgaben, Essensplan, Budget – Änderungen erscheinen bei allen in Echtzeit.
-
----
-
-## Kalender abonnieren (`.ics`)
-
-Pro Haushalt gibt es eine **abonnierbare Kalender-URL** (zu finden unter **Kalender**), die
-Aufgaben-Fälligkeiten, Mahlzeiten und Rechnungs-Fälligkeiten zusammenführt. Einmal in Google-/
-Apple-Kalender als „Kalender per URL abonnieren" eintragen → Termine erscheinen dort und
-aktualisieren sich automatisch.
-
-Die URL wird von einer **Supabase Edge Function** bereitgestellt
-([`supabase/functions/ics`](supabase/functions/ics/index.ts)) und über ein geheimes, pro Haushalt
-zufälliges `ics_token` abgesichert (kein Login im Kalender-Client nötig).
-
-### Edge Function deployen
-
-```bash
-# Supabase CLI installieren: https://supabase.com/docs/guides/cli
-supabase functions deploy ics --no-verify-jwt --project-ref <dein-ref>
-```
-
-Die Function nutzt `SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY` – beide werden von Supabase
-automatisch als Secrets bereitgestellt. Falls deine Edge-Function-Domain abweicht, kannst du sie
-über `VITE_ICS_BASE_URL` in der `.env` überschreiben.
-
----
-
-## Als PWA installieren
-
-Nach `npm run build && npm run preview` (oder im Deployment) bietet der Browser „Installieren" an.
-Auf dem Handy: Teilen → „Zum Home-Bildschirm". Die App-Shell funktioniert offline; Schreibvorgänge
-benötigen eine Verbindung zu Supabase.
-
----
-
-## Deployment
-
-- **Frontend:** Vercel oder Netlify. Build-Command `npm run build`, Output-Verzeichnis `dist`.
-  Die beiden `VITE_*`-Variablen als Environment Variables hinterlegen.
-- **Backend:** Supabase (Migration + Edge Function wie oben).
-
-Wichtig: Nach dem Deployment die **Site URL** und **Redirect URLs** in Supabase auf die
-Produktions-Domain anpassen.
+> Im Docker-Betrieb auf dem NAS muss `VITE_PB_URL` **nicht** gesetzt werden –
+> PocketBase liefert die App selbst aus (gleiche Herkunft).
 
 ---
 
@@ -139,22 +83,43 @@ Produktions-Domain anpassen.
 
 ```
 .
-├── supabase/
-│   ├── migrations/0001_init.sql   # Schema + RLS-Policies + Funktionen + Realtime
-│   ├── functions/ics/index.ts     # Edge Function: abonnierbarer .ics-Feed
-│   └── config.toml                # Supabase-CLI-Konfiguration (optional)
-├── scripts/gen-icons.mjs          # Erzeugt die PWA-Icons (ohne externe Tools)
+├── Dockerfile                 # Multi-Stage: PWA bauen + PocketBase (amd64)
+├── docker-compose.yml         # Ein Service „plan", Volume: pb_data
+├── pb_migrations/             # Collections + Zugriffsregeln (auto-angewendet)
+│   └── 1700000000_init.js
+├── pb_hooks/                  # Server-Logik: Einladungen einlösen + .ics-Feed
+│   └── main.pb.js
+├── scripts/gen-icons.mjs      # Erzeugt die PWA-Icons (ohne externe Tools)
 ├── src/
-│   ├── components/                # UI-Primitives (shadcn-Stil), Layout, Avatar …
-│   ├── hooks/                     # useAuth, useHousehold, useTheme, useRealtime
-│   ├── lib/                       # Supabase-Client, Query-Client, Utils, Konstanten
-│   ├── pages/                     # Dashboard, Einkauf, Aufgaben, Essen, Budget, Kalender, Einstellungen
-│   ├── types/                     # Domänen-Typen (Spiegel des SQL-Schemas)
-│   ├── App.tsx                    # Routing + Auth-/Onboarding-Gating
-│   └── main.tsx                   # Provider-Setup
-├── .env.example
-└── vite.config.ts                 # inkl. PWA-Konfiguration
+│   ├── components/            # UI-Primitives (shadcn-Stil), Layout, Avatar …
+│   ├── hooks/                 # useAuth, useHousehold, useTheme, useRealtime
+│   ├── lib/                   # PocketBase-Client, Query-Client, Utils, Konstanten
+│   ├── pages/                 # Dashboard, Einkauf, Aufgaben, Essen, Budget, Kalender, Einstellungen
+│   └── types/                 # Domänen-Typen (Spiegel der Collections)
+├── docs/ANLEITUNG.md          # Einsteiger-Anleitung (NAS + Handy)
+└── vite.config.ts             # inkl. PWA-Konfiguration
 ```
+
+---
+
+## Datenmodell & Zugriff
+
+Collections (entsprechen den früheren SQL-Tabellen): `households`,
+`household_members`, `invites`, `shopping_lists`, `shopping_items`, `tasks`,
+`recipes`, `recipe_ingredients`, `meal_plan_entries`, `transactions`,
+`recurring_bills`. Profilfelder (Name, Farbe, Emoji) liegen auf der
+eingebauten `users`-Collection.
+
+Jede inhaltliche Collection hat ein `household_id`-Relationsfeld. Die
+**API Rules** erlauben Zugriff nur Mitgliedern des jeweiligen Haushalts:
+
+```
+@request.auth.id != "" && household_id.household_members_via_household_id.user_id ?= @request.auth.id
+```
+
+Server-Logik in `pb_hooks/main.pb.js`:
+- `POST /api/plan/redeem-invite` – Einladungs-Code einlösen (Mitglied werden)
+- `GET /ics/:token` – abonnierbarer Kalender-Feed pro Haushalt
 
 ---
 
@@ -171,18 +136,14 @@ Produktions-Domain anpassen.
 
 ---
 
-## Architektur-Entscheidungen & Annahmen
+## Architektur-Hinweise
 
-- **Sicherheit / RLS:** Jede inhaltliche Tabelle hat `household_id`. Eine `SECURITY DEFINER`-Funktion
-  `is_household_member()` verhindert Rekursion in den Policies. Haushalt erstellen und Einladung
-  einlösen laufen über atomare RPCs (`create_household`, `redeem_invite`), damit der Ersteller
-  zuverlässig als Mitglied eingetragen wird, ohne die Policies aufzuweichen.
-- **Echtzeit:** Pro Tabelle wird ein Realtime-Channel gefiltert nach `household_id` abonniert; bei
-  Änderungen wird der passende TanStack-Query-Key invalidiert. Abhaken/Erledigen nutzt zusätzlich
-  **optimistische Updates** für sofortiges Feedback.
-- **Wiederkehrende Aufgaben** regenerieren sich serverseitig: `complete_task()` markiert die Instanz
-  als erledigt und legt – bei Wiederholung – automatisch die nächste offene Instanz an.
-- **Kalender-Feed** bewusst als read-only `.ics` (robust, kein OAuth nötig). Bidirektionale
-  Google-Sync wäre die spätere Kür-Erweiterung.
-- **Magic-Link & Passwort** werden beide unterstützt; das Profil (`profiles`) wird per Trigger bei
-  Registrierung automatisch angelegt.
+- **Sicherheit:** Zugriff wird über PocketBase-API-Rules je Collection erzwungen
+  (Äquivalent zu Row Level Security). Der Kalender-Feed ist über ein geheimes,
+  pro Haushalt zufälliges `ics_token` abgesichert.
+- **Echtzeit:** Pro Collection wird eine Realtime-Subscription abonniert; bei
+  Änderungen wird der passende TanStack-Query-Key invalidiert. Abhaken/Erledigen
+  nutzt zusätzlich **optimistische Updates** für sofortiges Feedback.
+- **Wiederkehrende Aufgaben** regenerieren sich beim Abschließen automatisch
+  (nächste Instanz mit neuem Fälligkeitsdatum).
+- **Login:** E-Mail + Passwort, ohne E-Mail-Bestätigung (kein Mailserver nötig).

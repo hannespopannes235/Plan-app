@@ -52,6 +52,17 @@ export function contrastText(hex: string): string {
   return luminance > 0.6 ? "#1a1a1a" : "#ffffff";
 }
 
+/**
+ * Zufälliges Token (UUID-ähnlich) – funktioniert auch ohne HTTPS, da
+ * `crypto.randomUUID()` nur in sicheren Kontexten verfügbar ist, der Zugriff
+ * aufs NAS aber oft über http://NAS-IP läuft.
+ */
+export function randomToken(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Lesbarer Einladungs-Code, z. B. „PLAN-7F3K". */
 export function randomInviteCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

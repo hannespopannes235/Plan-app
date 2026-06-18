@@ -1,14 +1,15 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 
 /**
- * Abonniert Realtime-Änderungen für eine Tabelle innerhalb des aktiven
- * Haushalts und invalidiert den passenden Query-Key. So sehen alle Geräte
- * Änderungen sofort.
+ * Abonniert Realtime-Änderungen einer PocketBase-Collection und invalidiert den
+ * passenden Query-Key. So sehen alle Geräte Änderungen sofort.
+ *
+ * Die API-Rules sorgen dafür, dass man nur Events zu eigenen Haushalten erhält.
  */
 export function useRealtimeTable(
-  table: string,
+  collection: string,
   householdId: string | null | undefined,
   queryKey: (string | null | undefined)[],
 ) {
@@ -16,25 +17,25 @@ export function useRealtimeTable(
 
   useEffect(() => {
     if (!householdId) return;
-    const channel = supabase
-      .channel(`${table}-${householdId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table,
-          filter: `household_id=eq.${householdId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey });
-        },
-      )
-      .subscribe();
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    pb.collection(collection)
+      .subscribe("*", () => {
+        queryClient.invalidateQueries({ queryKey });
+      })
+      .then((unsub) => {
+        if (cancelled) unsub();
+        else unsubscribe = unsub;
+      })
+      .catch(() => {
+        /* Verbindung evtl. nicht verfügbar – TanStack Query refetcht ohnehin */
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, householdId, queryClient, JSON.stringify(queryKey)]);
+  }, [collection, householdId, queryClient, JSON.stringify(queryKey)]);
 }

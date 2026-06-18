@@ -2,9 +2,8 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_SUPABASE_URL: string;
-  readonly VITE_SUPABASE_ANON_KEY: string;
-  readonly VITE_ICS_BASE_URL?: string;
+  /** Optionale PocketBase-URL (Standard: gleiche Herkunft wie die App). */
+  readonly VITE_PB_URL?: string;
 }
 
 interface ImportMeta {

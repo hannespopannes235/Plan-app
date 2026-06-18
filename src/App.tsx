@@ -1,9 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { HouseholdProvider, useHousehold } from "@/hooks/useHousehold";
 import { PageLoader } from "@/components/common";
-import { ConfigMissing } from "@/pages/ConfigMissing";
 import { Login } from "@/pages/Login";
 import { Onboarding } from "@/pages/Onboarding";
 import { AppLayout } from "@/components/AppLayout";
@@ -38,11 +36,10 @@ function AuthedApp() {
 }
 
 export default function App() {
-  const { session, loading } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (!isSupabaseConfigured) return <ConfigMissing />;
   if (loading) return <PageLoader />;
-  if (!session) return <Login />;
+  if (!user) return <Login />;
 
   return (
     <HouseholdProvider>

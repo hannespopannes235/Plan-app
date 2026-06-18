@@ -8,7 +8,7 @@ import {
   ChevronRight,
   Receipt,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { MEAL_SLOT_LABELS } from "@/lib/constants";
@@ -29,46 +29,49 @@ export function Dashboard() {
     enabled: !!activeId,
     queryFn: async () => {
       const [openItems, todayTasks, todayMeals, monthTx, soonBills] = await Promise.all([
-        supabase
-          .from("shopping_items")
-          .select("id", { count: "exact", head: true })
-          .eq("household_id", activeId!)
-          .eq("is_checked", false),
-        supabase
-          .from("tasks")
-          .select("id, title, assignee_id")
-          .eq("household_id", activeId!)
-          .eq("is_done", false)
-          .lte("due_date", today),
-        supabase
-          .from("meal_plan_entries")
-          .select("slot, custom_title, recipes(title)")
-          .eq("household_id", activeId!)
-          .eq("date", today),
-        supabase
-          .from("transactions")
-          .select("amount")
-          .eq("household_id", activeId!)
-          .gte("date", `${month}-01`),
-        supabase
-          .from("recurring_bills")
-          .select("id, name, amount, next_due_date")
-          .eq("household_id", activeId!)
-          .order("next_due_date")
-          .limit(3),
+        pb.collection("shopping_items").getList(1, 1, {
+          filter: pb.filter("household_id = {:h} && is_checked = false", { h: activeId }),
+        }),
+        pb.collection("tasks").getFullList<{ id: string; title: string; assignee_id: string }>({
+          filter: pb.filter(
+            'household_id = {:h} && is_done = false && due_date != "" && due_date <= {:t}',
+            { h: activeId, t: today },
+          ),
+        }),
+        pb
+          .collection("meal_plan_entries")
+          .getFullList<{
+            slot: keyof typeof MEAL_SLOT_LABELS;
+            custom_title: string;
+            expand?: { recipe_id?: { title: string } };
+          }>({
+            filter: pb.filter("household_id = {:h} && date = {:t}", { h: activeId, t: today }),
+            expand: "recipe_id",
+          }),
+        pb.collection("transactions").getFullList<{ amount: number }>({
+          filter: pb.filter("household_id = {:h} && date >= {:m}", { h: activeId, m: `${month}-01` }),
+        }),
+        pb.collection("recurring_bills").getList<{
+          id: string;
+          name: string;
+          amount: number;
+          next_due_date: string;
+        }>(1, 3, {
+          filter: pb.filter("household_id = {:h}", { h: activeId }),
+          sort: "next_due_date",
+        }),
       ]);
 
-      const monthTotal = (monthTx.data ?? []).reduce((s, t) => s + Number(t.amount), 0);
+      const monthTotal = monthTx.reduce((s, t) => s + Number(t.amount), 0);
       return {
-        openItemsCount: openItems.count ?? 0,
-        todayTasks: todayTasks.data ?? [],
-        todayMeals: (todayMeals.data ?? []) as unknown as {
-          slot: keyof typeof MEAL_SLOT_LABELS;
-          custom_title: string | null;
-          recipes: { title: string } | { title: string }[] | null;
-        }[],
+        openItemsCount: openItems.totalItems,
+        todayTasks,
+        todayMeals: todayMeals.map((m) => ({
+          slot: m.slot,
+          title: m.custom_title || m.expand?.recipe_id?.title || "Mahlzeit",
+        })),
         monthTotal,
-        soonBills: soonBills.data ?? [],
+        soonBills: soonBills.items,
       };
     },
   });
@@ -141,17 +144,14 @@ export function Dashboard() {
       {d.todayMeals.length > 0 && (
         <SectionCard title="Heute auf dem Tisch" to="/essensplan">
           <ul className="space-y-1.5">
-            {d.todayMeals.map((m, i) => {
-              const recipeTitle = Array.isArray(m.recipes) ? m.recipes[0]?.title : m.recipes?.title;
-              return (
-                <li key={i} className="flex items-center gap-2 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {MEAL_SLOT_LABELS[m.slot]}
-                  </span>
-                  <span className="font-medium">{m.custom_title ?? recipeTitle ?? "Mahlzeit"}</span>
-                </li>
-              );
-            })}
+            {d.todayMeals.map((m, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {MEAL_SLOT_LABELS[m.slot]}
+                </span>
+                <span className="font-medium">{m.title}</span>
+              </li>
+            ))}
           </ul>
         </SectionCard>
       )}

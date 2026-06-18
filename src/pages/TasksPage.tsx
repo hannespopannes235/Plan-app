@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, CheckSquare, Repeat, CalendarClock, Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
+import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useRealtimeTable } from "@/hooks/useRealtime";
 import { useToast } from "@/components/ui/toast";
@@ -34,8 +35,19 @@ import {
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageLoader, EmptyState } from "@/components/common";
 
+/** Nächstes Fälligkeitsdatum bei Wiederholung (ISO YYYY-MM-DD). */
+function nextDueDate(iso: string, freq: RecurrenceFreq, interval: number): string {
+  const d = new Date(iso + "T00:00:00");
+  const n = Math.max(1, interval || 1);
+  if (freq === "daily") d.setDate(d.getDate() + n);
+  else if (freq === "weekly") d.setDate(d.getDate() + n * 7);
+  else if (freq === "monthly") d.setMonth(d.getMonth() + n);
+  return toISODate(d);
+}
+
 export function TasksPage() {
   const { activeId, members, profiles } = useHousehold();
+  const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const key = ["tasks", activeId];
@@ -45,21 +57,34 @@ export function TasksPage() {
   const tasksQuery = useQuery({
     queryKey: key,
     enabled: !!activeId,
-    queryFn: async (): Promise<Task[]> => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("household_id", activeId!)
-        .order("due_date", { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<Task[]> =>
+      pb.collection("tasks").getFullList<Task>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "due_date",
+      }),
   });
 
   const complete = useMutation({
     mutationFn: async (task: Task) => {
-      const { error } = await supabase.rpc("complete_task", { p_task_id: task.id });
-      if (error) throw error;
+      await pb.collection("tasks").update(task.id, {
+        is_done: true,
+        completed_at: new Date().toISOString(),
+        completed_by: user?.id ?? "",
+      });
+      // Wiederkehrende Aufgabe: nächste offene Instanz anlegen
+      if (task.recurrence !== "none" && task.due_date) {
+        await pb.collection("tasks").create({
+          household_id: task.household_id,
+          title: task.title,
+          notes: task.notes ?? "",
+          assignee_id: task.assignee_id ?? "",
+          due_date: nextDueDate(task.due_date, task.recurrence, task.recurrence_interval),
+          recurrence: task.recurrence,
+          recurrence_interval: task.recurrence_interval || 1,
+          points: task.points || 1,
+          is_done: false,
+        });
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
     onError: (e) => toast({ title: "Fehler", description: String(e), variant: "error" }),
@@ -67,19 +92,18 @@ export function TasksPage() {
 
   const reopen = useMutation({
     mutationFn: async (task: Task) => {
-      const { error } = await supabase
-        .from("tasks")
-        .update({ is_done: false, completed_at: null, completed_by: null })
-        .eq("id", task.id);
-      if (error) throw error;
+      await pb.collection("tasks").update(task.id, {
+        is_done: false,
+        completed_at: "",
+        completed_by: "",
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tasks").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("tasks").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
@@ -230,15 +254,17 @@ function TaskDialog() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("tasks").insert({
+      await pb.collection("tasks").create({
         household_id: activeId,
         title: title.trim(),
-        notes: notes.trim() || null,
-        assignee_id: assignee === "none" ? null : assignee,
-        due_date: dueDate || null,
+        notes: notes.trim(),
+        assignee_id: assignee === "none" ? "" : assignee,
+        due_date: dueDate || "",
         recurrence,
+        recurrence_interval: 1,
+        points: 1,
+        is_done: false,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks", activeId] });

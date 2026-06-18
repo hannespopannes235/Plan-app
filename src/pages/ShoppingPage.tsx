@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, ShoppingCart, X, ListPlus } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useRealtimeTable } from "@/hooks/useRealtime";
@@ -40,15 +40,11 @@ export function ShoppingPage() {
   const listsQuery = useQuery({
     queryKey: ["shopping_lists", activeId],
     enabled: !!activeId,
-    queryFn: async (): Promise<ShoppingList[]> => {
-      const { data, error } = await supabase
-        .from("shopping_lists")
-        .select("*")
-        .eq("household_id", activeId!)
-        .order("created_at");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<ShoppingList[]> =>
+      pb.collection("shopping_lists").getFullList<ShoppingList>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "created",
+      }),
   });
 
   const lists = listsQuery.data ?? [];
@@ -57,27 +53,16 @@ export function ShoppingPage() {
   const itemsQuery = useQuery({
     queryKey: ["shopping_items", activeId, currentListId],
     enabled: !!currentListId,
-    queryFn: async (): Promise<ShoppingItem[]> => {
-      const { data, error } = await supabase
-        .from("shopping_items")
-        .select("*")
-        .eq("list_id", currentListId!)
-        .order("created_at");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<ShoppingItem[]> =>
+      pb.collection("shopping_items").getFullList<ShoppingItem>({
+        filter: pb.filter("list_id = {:l}", { l: currentListId }),
+        sort: "created",
+      }),
   });
 
   const createList = useMutation({
-    mutationFn: async (name: string) => {
-      const { data, error } = await supabase
-        .from("shopping_lists")
-        .insert({ household_id: activeId, name })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as ShoppingList;
-    },
+    mutationFn: async (name: string) =>
+      pb.collection("shopping_lists").create<ShoppingList>({ household_id: activeId, name }),
     onSuccess: (list) => {
       qc.invalidateQueries({ queryKey: ["shopping_lists", activeId] });
       setActiveListId(list.id);
@@ -86,14 +71,13 @@ export function ShoppingPage() {
 
   const addItem = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("shopping_items").insert({
+      await pb.collection("shopping_items").create({
         household_id: activeId,
         list_id: currentListId,
         name: newItem.trim(),
-        quantity: newQty.trim() || null,
+        quantity: newQty.trim(),
         category: newCat,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       setNewItem("");
@@ -105,11 +89,10 @@ export function ShoppingPage() {
 
   const toggleItem = useMutation({
     mutationFn: async (item: ShoppingItem) => {
-      const { error } = await supabase
-        .from("shopping_items")
-        .update({ is_checked: !item.is_checked, checked_by: !item.is_checked ? user?.id : null })
-        .eq("id", item.id);
-      if (error) throw error;
+      await pb.collection("shopping_items").update(item.id, {
+        is_checked: !item.is_checked,
+        checked_by: !item.is_checked ? user?.id ?? "" : "",
+      });
     },
     // Optimistisches Update
     onMutate: async (item) => {
@@ -129,23 +112,26 @@ export function ShoppingPage() {
 
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("shopping_items").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("shopping_items").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["shopping_items", activeId, currentListId] }),
   });
 
   const clearChecked = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("shopping_items")
-        .delete()
-        .eq("list_id", currentListId)
-        .eq("is_checked", true);
-      if (error) throw error;
+      const checked = await pb.collection("shopping_items").getFullList<ShoppingItem>({
+        filter: pb.filter("list_id = {:l} && is_checked = true", { l: currentListId }),
+      });
+      await Promise.all(checked.map((i) => pb.collection("shopping_items").delete(i.id)));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["shopping_items", activeId, currentListId] }),
   });
+
+  const quickAdd = (name: string) => {
+    pb.collection("shopping_items")
+      .create({ household_id: activeId, list_id: currentListId, name })
+      .then(() => qc.invalidateQueries({ queryKey: ["shopping_items", activeId, currentListId] }));
+  };
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const grouped = useMemo(() => {
@@ -249,14 +235,7 @@ export function ShoppingPage() {
                 {QUICK_ITEMS.map((q) => (
                   <button
                     key={q}
-                    onClick={() =>
-                      supabase
-                        .from("shopping_items")
-                        .insert({ household_id: activeId, list_id: currentListId, name: q })
-                        .then(() =>
-                          qc.invalidateQueries({ queryKey: ["shopping_items", activeId, currentListId] }),
-                        )
-                    }
+                    onClick={() => quickAdd(q)}
                     className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground hover:bg-secondary/70"
                   >
                     + {q}

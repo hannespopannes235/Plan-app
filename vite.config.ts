@@ -72,7 +72,7 @@ export default defineConfig({
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
           charts: ["recharts"],
-          supabase: ["@supabase/supabase-js"],
+          pocketbase: ["pocketbase"],
         },
       },
     },

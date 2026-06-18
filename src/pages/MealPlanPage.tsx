@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, UtensilsCrossed, Trash2, ShoppingCart, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { pb } from "@/lib/pocketbase";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useRealtimeTable } from "@/hooks/useRealtime";
 import { useToast } from "@/components/ui/toast";
@@ -90,26 +90,23 @@ function WeekPlan() {
   const entriesQuery = useQuery({
     queryKey: ["meals", activeId, from],
     enabled: !!activeId,
-    queryFn: async (): Promise<MealPlanEntry[]> => {
-      const { data, error } = await supabase
-        .from("meal_plan_entries")
-        .select("*")
-        .eq("household_id", activeId!)
-        .gte("date", from)
-        .lte("date", to);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<MealPlanEntry[]> =>
+      pb.collection("meal_plan_entries").getFullList<MealPlanEntry>({
+        filter: pb.filter("household_id = {:h} && date >= {:from} && date <= {:to}", {
+          h: activeId,
+          from,
+          to,
+        }),
+      }),
   });
 
   const recipesQuery = useQuery({
     queryKey: ["recipes", activeId],
     enabled: !!activeId,
-    queryFn: async (): Promise<Recipe[]> => {
-      const { data, error } = await supabase.from("recipes").select("*").eq("household_id", activeId!);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<Recipe[]> =>
+      pb.collection("recipes").getFullList<Recipe>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+      }),
   });
 
   const recipes = recipesQuery.data ?? [];
@@ -117,42 +114,39 @@ function WeekPlan() {
 
   const removeEntry = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("meal_plan_entries").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("meal_plan_entries").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meals", activeId, from] }),
   });
 
   const generateList = useMutation({
     mutationFn: async () => {
-      const recipeIds = entries.map((e) => e.recipe_id).filter(Boolean) as string[];
-      if (recipeIds.length === 0) throw new Error("Keine Rezepte im Plan");
+      const recipeIds = new Set(entries.map((e) => e.recipe_id).filter(Boolean) as string[]);
+      if (recipeIds.size === 0) throw new Error("Keine Rezepte im Plan");
 
-      const { data: ings, error } = await supabase
-        .from("recipe_ingredients")
-        .select("*")
-        .in("recipe_id", recipeIds);
-      if (error) throw error;
+      // Alle Zutaten des Haushalts laden und auf die geplanten Rezepte filtern
+      const allIngredients = await pb.collection("recipe_ingredients").getFullList<RecipeIngredient>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+      });
+      const ings = allIngredients.filter((i) => recipeIds.has(i.recipe_id));
 
-      const { data: list, error: lErr } = await supabase
-        .from("shopping_lists")
-        .insert({ household_id: activeId, name: `Wochenplan ${from}` })
-        .select()
-        .single();
-      if (lErr) throw lErr;
-
-      const items = (ings ?? []).map((i: RecipeIngredient) => ({
+      const list = await pb.collection("shopping_lists").create<ShoppingList>({
         household_id: activeId,
-        list_id: (list as ShoppingList).id,
-        name: i.name,
-        quantity: i.quantity,
-        category: i.category,
-      }));
-      if (items.length > 0) {
-        const { error: iErr } = await supabase.from("shopping_items").insert(items);
-        if (iErr) throw iErr;
-      }
-      return items.length;
+        name: `Wochenplan ${from}`,
+      });
+
+      await Promise.all(
+        ings.map((i) =>
+          pb.collection("shopping_items").create({
+            household_id: activeId,
+            list_id: list.id,
+            name: i.name,
+            quantity: i.quantity ?? "",
+            category: i.category,
+          }),
+        ),
+      );
+      return ings.length;
     },
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ["shopping_lists", activeId] });
@@ -228,7 +222,7 @@ function WeekPlan() {
                         className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground"
                       >
                         <span className="opacity-60">{MEAL_SLOT_LABELS[e.slot].slice(0, 1)}</span>
-                        {e.custom_title ?? recipe?.title ?? "Mahlzeit"}
+                        {e.custom_title || recipe?.title || "Mahlzeit"}
                         <button onClick={() => removeEntry.mutate(e.id)} aria-label="Entfernen">
                           <X className="h-3 w-3" />
                         </button>
@@ -268,14 +262,13 @@ function AddMealDialog({
 
   const add = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("meal_plan_entries").insert({
+      await pb.collection("meal_plan_entries").create({
         household_id: activeId,
         date,
         slot,
-        recipe_id: recipeId === "custom" ? null : recipeId,
-        custom_title: recipeId === "custom" ? custom.trim() || "Mahlzeit" : null,
+        recipe_id: recipeId === "custom" ? "" : recipeId,
+        custom_title: recipeId === "custom" ? custom.trim() || "Mahlzeit" : "",
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["meals", activeId, weekFrom] });
@@ -361,34 +354,25 @@ function RecipesTab() {
   const recipesQuery = useQuery({
     queryKey: ["recipes", activeId],
     enabled: !!activeId,
-    queryFn: async (): Promise<Recipe[]> => {
-      const { data, error } = await supabase
-        .from("recipes")
-        .select("*")
-        .eq("household_id", activeId!)
-        .order("title");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<Recipe[]> =>
+      pb.collection("recipes").getFullList<Recipe>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "title",
+      }),
   });
 
   const ingredientsQuery = useQuery({
     queryKey: ["recipe_ingredients", activeId],
     enabled: !!activeId,
-    queryFn: async (): Promise<RecipeIngredient[]> => {
-      const { data, error } = await supabase
-        .from("recipe_ingredients")
-        .select("*")
-        .eq("household_id", activeId!);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async (): Promise<RecipeIngredient[]> =>
+      pb.collection("recipe_ingredients").getFullList<RecipeIngredient>({
+        filter: pb.filter("household_id = {:h}", { h: activeId }),
+      }),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("recipes").delete().eq("id", id);
-      if (error) throw error;
+      await pb.collection("recipes").delete(id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recipes", activeId] }),
   });
@@ -470,25 +454,24 @@ function RecipeDialog() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { data: recipe, error } = await supabase
-        .from("recipes")
-        .insert({ household_id: activeId, title: title.trim(), description: description.trim() || null, servings })
-        .select()
-        .single();
-      if (error) throw error;
+      const recipe = await pb.collection("recipes").create<Recipe>({
+        household_id: activeId,
+        title: title.trim(),
+        description: description.trim(),
+        servings,
+      });
 
       const valid = ingredients.filter((i) => i.name.trim());
-      if (valid.length > 0) {
-        const { error: iErr } = await supabase.from("recipe_ingredients").insert(
-          valid.map((i) => ({
+      await Promise.all(
+        valid.map((i) =>
+          pb.collection("recipe_ingredients").create({
             household_id: activeId,
-            recipe_id: (recipe as Recipe).id,
+            recipe_id: recipe.id,
             name: i.name.trim(),
-            quantity: i.quantity.trim() || null,
-          })),
-        );
-        if (iErr) throw iErr;
-      }
+            quantity: i.quantity.trim(),
+          }),
+        ),
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["recipes", activeId] });

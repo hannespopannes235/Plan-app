@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Copy, Check, CheckSquare, UtensilsCrossed, Receipt } from "lucide-react";
-import { supabase, icsUrl } from "@/lib/supabase";
+import { pb, icsUrl } from "@/lib/pocketbase";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useToast } from "@/components/ui/toast";
 import { MEAL_SLOT_LABELS } from "@/lib/constants";
 import { toISODate, formatDateLong, formatCurrency } from "@/lib/utils";
-import type { MealPlanEntry, RecurringBill, Task } from "@/types/database";
+import type { MealSlot } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,50 +34,55 @@ export function CalendarPage() {
     enabled: !!activeId,
     queryFn: async (): Promise<AgendaItem[]> => {
       const [tasks, meals, bills] = await Promise.all([
-        supabase
-          .from("tasks")
-          .select("id, title, due_date, is_done")
-          .eq("household_id", activeId!)
-          .not("due_date", "is", null)
-          .gte("due_date", today)
-          .lte("due_date", horizon),
-        supabase
-          .from("meal_plan_entries")
-          .select("id, date, slot, custom_title, recipes(title)")
-          .eq("household_id", activeId!)
-          .gte("date", today)
-          .lte("date", horizon),
-        supabase
-          .from("recurring_bills")
-          .select("id, name, amount, next_due_date")
-          .eq("household_id", activeId!)
-          .gte("next_due_date", today)
-          .lte("next_due_date", horizon),
+        pb.collection("tasks").getFullList<{ title: string; due_date: string; is_done: boolean }>({
+          filter: pb.filter(
+            'household_id = {:h} && due_date != "" && due_date >= {:from} && due_date <= {:to}',
+            { h: activeId, from: today, to: horizon },
+          ),
+        }),
+        pb
+          .collection("meal_plan_entries")
+          .getFullList<{
+            date: string;
+            slot: MealSlot;
+            custom_title: string;
+            expand?: { recipe_id?: { title: string } };
+          }>({
+            filter: pb.filter("household_id = {:h} && date >= {:from} && date <= {:to}", {
+              h: activeId,
+              from: today,
+              to: horizon,
+            }),
+            expand: "recipe_id",
+          }),
+        pb
+          .collection("recurring_bills")
+          .getFullList<{ name: string; amount: number; next_due_date: string }>({
+            filter: pb.filter(
+              "household_id = {:h} && next_due_date >= {:from} && next_due_date <= {:to}",
+              { h: activeId, from: today, to: horizon },
+            ),
+          }),
       ]);
 
       const items: AgendaItem[] = [];
-      for (const t of (tasks.data ?? []) as Task[]) {
-        if (t.due_date)
-          items.push({
-            date: t.due_date,
-            kind: "task",
-            label: t.title,
-            meta: t.is_done ? "erledigt" : "Aufgabe",
-          });
+      for (const t of tasks) {
+        items.push({
+          date: t.due_date,
+          kind: "task",
+          label: t.title,
+          meta: t.is_done ? "erledigt" : "Aufgabe",
+        });
       }
-      type MealRow = Pick<MealPlanEntry, "date" | "slot" | "custom_title"> & {
-        recipes: { title: string } | { title: string }[] | null;
-      };
-      for (const m of (meals.data ?? []) as unknown as MealRow[]) {
-        const recipeTitle = Array.isArray(m.recipes) ? m.recipes[0]?.title : m.recipes?.title;
+      for (const m of meals) {
         items.push({
           date: m.date,
           kind: "meal",
-          label: m.custom_title ?? recipeTitle ?? "Mahlzeit",
+          label: m.custom_title || m.expand?.recipe_id?.title || "Mahlzeit",
           meta: MEAL_SLOT_LABELS[m.slot],
         });
       }
-      for (const b of (bills.data ?? []) as RecurringBill[]) {
+      for (const b of bills) {
         items.push({
           date: b.next_due_date,
           kind: "bill",
