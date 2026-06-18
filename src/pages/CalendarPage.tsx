@@ -5,7 +5,7 @@ import { pb, icsUrl } from "@/lib/pocketbase";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useToast } from "@/components/ui/toast";
 import { MEAL_SLOT_LABELS } from "@/lib/constants";
-import { toISODate, formatDateLong, formatCurrency } from "@/lib/utils";
+import { toISODate, formatDateLong, formatCurrency, copyToClipboard } from "@/lib/utils";
 import type { MealSlot } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -171,13 +171,17 @@ function IcsSubscribe({ token }: { token: string }) {
   const url = icsUrl(token);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyToClipboard(url);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast({ title: "Link kopiert", variant: "success" });
-    } catch {
-      toast({ title: "Kopieren nicht möglich", variant: "error" });
+    } else {
+      toast({
+        title: "Kopieren nicht möglich",
+        description: "Markiere die URL und kopiere sie manuell.",
+        variant: "error",
+      });
     }
   };
 

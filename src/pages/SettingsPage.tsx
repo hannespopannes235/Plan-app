@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useToast } from "@/components/ui/toast";
 import { MEMBER_COLORS, AVATAR_EMOJIS } from "@/lib/constants";
-import { randomInviteCode, cn } from "@/lib/utils";
+import { randomInviteCode, cn, copyToClipboard } from "@/lib/utils";
 import type { Invite, Profile } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -243,10 +243,18 @@ function InviteRow({ invite, onDelete }: { invite: Invite; onDelete: () => void 
   const expired = new Date(invite.expires_at) < new Date();
 
   const copy = async () => {
-    await navigator.clipboard.writeText(invite.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast({ title: "Code kopiert", variant: "success" });
+    const ok = await copyToClipboard(invite.code);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "Code kopiert", variant: "success" });
+    } else {
+      toast({
+        title: "Kopieren nicht möglich",
+        description: "Markiere den Code und kopiere ihn manuell.",
+        variant: "error",
+      });
+    }
   };
 
   return (
