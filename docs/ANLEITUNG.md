@@ -78,8 +78,8 @@ das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
    ```
 
 > 🧑‍💻 **Schneller per Git (optional):** Wer SSH hat (nächster Abschnitt), kann
-> direkt `git clone <repo-url> /volume1/docker/plan` ausführen. Für die
-> Anleitung ist das nicht nötig.
+> direkt `git clone https://github.com/hannespopannes235/Plan-app.git /volume1/docker/plan`
+> ausführen – dann ist Abschnitt 11 Weg B (einfache Updates) auch gleich eingerichtet.
 
 ---
 
@@ -371,10 +371,9 @@ Einmalige Einrichtung, danach ist jedes Update **ein einziger Befehl**.
    ```bash
    cd /volume1/docker
    mv plan plan_alt
-   git clone <REPO-URL> plan
+   git clone https://github.com/hannespopannes235/Plan-app.git plan
    cp -r plan_alt/pb_data plan/pb_data    # vorhandene Daten übernehmen
    ```
-   *(`<REPO-URL>` ist die Adresse dieses Repositorys.)*
 4. Einmal bauen:
    ```bash
    cd /volume1/docker/plan
