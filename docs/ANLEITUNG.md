@@ -240,6 +240,13 @@ anklicken, fertig.
 > 📱 Die App öffnet sich danach im Vollbild wie eine normale App. Änderungen, die
 > jemand auf einem Gerät macht, erscheinen **sofort** auf allen anderen.
 
+> 💡 **Volle App-Erfahrung nur mit HTTPS.** Über `http://NAS-IP:8090` funktioniert
+> die App vollständig, und „Zum Home-Bildschirm" klappt auch. Die **Offline-Nutzung**
+> und automatische App-Updates im Hintergrund (der sogenannte „Service Worker")
+> aktivieren sich aber erst, wenn du die App über eine **HTTPS-Adresse** öffnest.
+> Wer das möchte, richtet einmalig [Variante B in Abschnitt 9](#9-von-unterwegs-erreichbar-machen-https)
+> ein und installiert die App dann über `https://deinname.synology.me`.
+
 ---
 
 ## 7. Familie/WG einladen
@@ -286,6 +293,9 @@ Im Heim-WLAN funktioniert alles über `http://NAS-IP:8090`. Damit die App auch
 
 → Kein Port im Router öffnen, kein eigenes Zertifikat nötig. Am sichersten.
 
+> ℹ️ Auch mit VPN bleibt die Adresse `http://NAS-IP:8090` – die volle PWA mit
+> Offline-Funktion (Service Worker) gibt es nur über HTTPS, also über Variante B.
+
 ### Variante B – Eigene Adresse mit HTTPS (für den Dauerbetrieb)
 1. **DDNS einrichten:** DSM → Systemsteuerung → **Externer Zugriff → DDNS** →
    Synology-Adresse anlegen (z. B. `deinname.synology.me`).
@@ -300,6 +310,8 @@ Im Heim-WLAN funktioniert alles über `http://NAS-IP:8090`. Damit die App auch
    Hinzufügen → Let's Encrypt** mit deiner DDNS-Domain. HTTPS wird automatisch verlängert.
 5. Du erreichst Plan jetzt unter `https://deinname.synology.me`.
    Installiere die App auf dem Handy am besten gleich über **diese** Adresse.
+   Über HTTPS aktiviert sich automatisch der **Service Worker** – damit
+   funktioniert die App auch offline und aktualisiert sich im Hintergrund.
 
 > 🔒 Sicherheits-Tipp: Aktiviere in DSM die Firewall und (für den Admin-Zugang
 > `/_/`) die 2-Faktor-Authentifizierung.
@@ -325,18 +337,80 @@ So sicherst du ihn automatisch:
 
 ## 11. Updates einspielen
 
-Wenn es eine neue Version von Plan gibt:
+Bei einer neuen Version gibt es drei Wege – vom umständlich bis vollautomatisch.
+**Deine Daten in `pb_data` bleiben bei allen Wegen erhalten.**
 
-1. Neue Projektdateien nach `/volume1/docker/plan` hochladen
-   (via File Station, oder per SSH: `git pull`).
-2. Per SSH verbinden (wie in Abschnitt 3b beschrieben) und diese Befehle eingeben:
+### Weg A – Dateien manuell hochladen (ohne Git)
+Funktioniert immer, ist aber fehleranfällig (man vergisst leicht eine Datei):
+1. Geänderte Projektdateien per **File Station** nach `/volume1/docker/plan`
+   hochladen (überschreiben).
+2. Per SSH neu bauen:
    ```bash
    sudo -i
    cd /volume1/docker/plan
    docker-compose up -d --build
    ```
-3. Docker baut das neue Image und startet den Container neu.
-   Deine Daten in `pb_data` bleiben vollständig erhalten.
+
+### Weg B – Update per Git (empfohlen) 🟢
+Einmalige Einrichtung, danach ist jedes Update **ein einziger Befehl**.
+
+**Einmalig einrichten** (holt das Projekt sauber als Git-Kopie):
+1. Per SSH verbinden und Git installieren bzw. prüfen:
+   ```bash
+   sudo -i
+   git --version    # zeigt eine Versionsnummer? Dann ist Git schon da.
+   ```
+   Fehlt Git, im **Paket-Zentrum** das Paket **Git Server** installieren
+   (es bringt den `git`-Befehl mit).
+2. **Wichtig – Daten sichern**, falls schon Daten drin sind:
+   ```bash
+   cd /volume1/docker
+   cp -r plan/pb_data /volume1/docker/pb_data_backup    # Sicherheitskopie
+   ```
+3. Alten Ordner durch eine Git-Kopie ersetzen und Daten zurücklegen:
+   ```bash
+   cd /volume1/docker
+   mv plan plan_alt
+   git clone <REPO-URL> plan
+   cp -r plan_alt/pb_data plan/pb_data    # vorhandene Daten übernehmen
+   ```
+   *(`<REPO-URL>` ist die Adresse dieses Repositorys.)*
+4. Einmal bauen:
+   ```bash
+   cd /volume1/docker/plan
+   mkdir -p pb_data
+   docker-compose up -d --build
+   ```
+5. Läuft alles, kannst du `plan_alt` löschen: `rm -rf /volume1/docker/plan_alt`.
+
+**Ab jetzt updaten** – das ist alles:
+```bash
+sudo sh /volume1/docker/plan/update.sh
+```
+Das mitgelieferte Skript `update.sh` holt die neueste Version (`git pull`),
+baut den Container neu und räumt alte Images auf.
+
+### Weg C – Updates automatisieren (Aufgabenplaner) 🤖
+So aktualisiert sich Plan z. B. **jeden Sonntagnacht** von selbst (setzt Weg B voraus):
+
+1. DSM → **Systemsteuerung** → **Aufgabenplaner**.
+2. **Erstellen → Geplante Aufgabe → Benutzerdefiniertes Skript**.
+3. Reiter **Allgemein:**
+   - Aufgabe: `Plan aktualisieren`
+   - Benutzer: **root**
+4. Reiter **Zeitplan:** z. B. **wöchentlich, Sonntag, 03:00 Uhr**.
+5. Reiter **Aufgabeneinstellungen:**
+   - Optional **„Details per E-Mail senden"** anhaken (du bekommst das Protokoll zugeschickt).
+   - **Befehl ausführen:**
+     ```bash
+     sh /volume1/docker/plan/update.sh
+     ```
+6. Speichern. Fertig – Plan hält sich nun selbst aktuell.
+
+> ⚠️ **Hinweis zur Automatik:** Ein automatischer Rebuild braucht kurz mehr
+> Arbeitsspeicher und CPU. Plane ihn nachts, wenn das NAS nichts anderes tut.
+> Wer lieber die Kontrolle behält, lässt Weg C weg und führt `update.sh` einfach
+> bei Bedarf von Hand aus (Weg B).
 
 ---
 

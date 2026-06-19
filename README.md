@@ -91,6 +91,7 @@ npm run dev                 # läuft auf http://localhost:5173
 .
 ├── Dockerfile                 # Multi-Stage: PWA bauen + PocketBase (amd64)
 ├── docker-compose.yml         # Ein Service „plan", Volume: pb_data
+├── update.sh                  # Update auf dem NAS (git pull + Rebuild)
 ├── pb_migrations/             # Collections + Zugriffsregeln (auto-angewendet)
 │   └── 1700000000_init.js
 ├── pb_hooks/                  # Server-Logik: Einladungen einlösen + .ics-Feed

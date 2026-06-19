@@ -39,3 +39,6 @@ supabase/.temp
 # tsc -b Artefakte
 vite.config.js
 vite.config.d.ts
+
+# PocketBase-Daten (entstehen erst auf dem NAS, gehören nicht ins Repo)
+pb_data
