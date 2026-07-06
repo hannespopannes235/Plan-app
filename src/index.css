@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warmes, freundliches Light-Theme (Amber/Cream) */
+    --background: 40 60% 98%;
+    --foreground: 25 25% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 25 25% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 25% 18%;
+
+    --primary: 38 92% 50%;
+    --primary-foreground: 30 50% 12%;
+
+    --secondary: 40 30% 94%;
+    --secondary-foreground: 25 25% 22%;
+
+    --muted: 40 25% 95%;
+    --muted-foreground: 28 12% 45%;
+
+    --accent: 160 50% 92%;
+    --accent-foreground: 165 50% 22%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 35 25% 88%;
+    --input: 35 25% 88%;
+    --ring: 38 92% 50%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 25 18% 10%;
+    --foreground: 40 30% 94%;
+
+    --card: 25 16% 14%;
+    --card-foreground: 40 30% 94%;
+
+    --popover: 25 16% 14%;
+    --popover-foreground: 40 30% 94%;
+
+    --primary: 38 92% 55%;
+    --primary-foreground: 30 50% 12%;
+
+    --secondary: 25 12% 20%;
+    --secondary-foreground: 40 30% 92%;
+
+    --muted: 25 12% 18%;
+    --muted-foreground: 35 12% 62%;
+
+    --accent: 165 30% 22%;
+    --accent-foreground: 160 50% 88%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 25 12% 24%;
+    --input: 25 12% 24%;
+    --ring: 38 92% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* Safe-Area für PWA auf iOS */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

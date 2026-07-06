@@ -1,0 +1,11 @@
+services:
+  plan:
+    build: .
+    container_name: plan
+    restart: unless-stopped
+    ports:
+      # Linker Wert = Port auf dem NAS. Bei Konflikt z. B. auf "8095:8090" ändern.
+      - "8090:8090"
+    volumes:
+      # Einziger Ordner, den du sichern musst: enthält die komplette Datenbank.
+      - ./pb_data:/pb/pb_data
