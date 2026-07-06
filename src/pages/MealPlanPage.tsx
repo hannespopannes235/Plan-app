@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, UtensilsCrossed, Trash2, ShoppingCart, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  UtensilsCrossed,
+  Trash2,
+  ShoppingCart,
+  X,
+  Clock,
+  ExternalLink,
+} from "lucide-react";
 import { pb } from "@/lib/pocketbase";
 import { useHousehold } from "@/hooks/useHousehold";
 import { useRealtimeTable } from "@/hooks/useRealtime";
@@ -10,8 +20,10 @@ import { toISODate, cn } from "@/lib/utils";
 import type { MealPlanEntry, MealSlot, Recipe, RecipeIngredient, ShoppingList } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { RecipeImportDialog } from "@/components/RecipeImportDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -367,6 +379,7 @@ function RecipesTab() {
     queryFn: async (): Promise<RecipeIngredient[]> =>
       pb.collection("recipe_ingredients").getFullList<RecipeIngredient>({
         filter: pb.filter("household_id = {:h}", { h: activeId }),
+        sort: "created",
       }),
   });
 
@@ -384,12 +397,15 @@ function RecipesTab() {
 
   return (
     <div className="space-y-4">
-      <RecipeDialog />
+      <div className="flex flex-wrap gap-2">
+        <RecipeDialog />
+        <RecipeImportDialog />
+      </div>
       {recipes.length === 0 ? (
         <EmptyState
           icon={<UtensilsCrossed />}
           title="Noch keine Rezepte"
-          description="Lege Rezepte mit Zutaten an, um sie im Wochenplan zu nutzen."
+          description="Lege Rezepte an oder importiere sie aus Mela bzw. per Web-Link."
         />
       ) : (
         <div className="space-y-3">
@@ -398,13 +414,40 @@ function RecipesTab() {
             return (
               <Card key={r.id}>
                 <CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
+                  <div className="flex items-start gap-3">
+                    {r.image && (
+                      <img
+                        src={pb.files.getUrl(r, r.image, { thumb: "600x0" })}
+                        alt=""
+                        className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
                       <h3 className="font-semibold">{r.title}</h3>
                       {r.description && (
-                        <p className="mt-0.5 text-sm text-muted-foreground">{r.description}</p>
+                        <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                          {r.description}
+                        </p>
                       )}
-                      <p className="mt-0.5 text-xs text-muted-foreground">{r.servings} Portionen</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        <span>{r.servings} Portionen</span>
+                        {r.total_time && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> {r.total_time}
+                          </span>
+                        )}
+                        {r.link && (
+                          <a
+                            href={r.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 hover:text-foreground"
+                          >
+                            <ExternalLink className="h-3 w-3" /> Quelle
+                          </a>
+                        )}
+                      </div>
                     </div>
                     <button
                       onClick={() => remove.mutate(r.id)}
@@ -426,6 +469,16 @@ function RecipesTab() {
                         </span>
                       ))}
                     </div>
+                  )}
+                  {r.instructions && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer select-none text-sm font-medium text-primary">
+                        Zubereitung anzeigen
+                      </summary>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                        {r.instructions}
+                      </p>
+                    </details>
                   )}
                 </CardContent>
               </Card>
@@ -449,6 +502,7 @@ function RecipeDialog() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [servings, setServings] = useState(2);
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([{ name: "", quantity: "" }]);
 
@@ -458,26 +512,27 @@ function RecipeDialog() {
         household_id: activeId,
         title: title.trim(),
         description: description.trim(),
+        instructions: instructions.trim(),
         servings,
       });
 
       const valid = ingredients.filter((i) => i.name.trim());
-      await Promise.all(
-        valid.map((i) =>
-          pb.collection("recipe_ingredients").create({
-            household_id: activeId,
-            recipe_id: recipe.id,
-            name: i.name.trim(),
-            quantity: i.quantity.trim(),
-          }),
-        ),
-      );
+      // sequenziell, damit die eingegebene Reihenfolge erhalten bleibt
+      for (const i of valid) {
+        await pb.collection("recipe_ingredients").create({
+          household_id: activeId,
+          recipe_id: recipe.id,
+          name: i.name.trim(),
+          quantity: i.quantity.trim(),
+        });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["recipes", activeId] });
       qc.invalidateQueries({ queryKey: ["recipe_ingredients", activeId] });
       setTitle("");
       setDescription("");
+      setInstructions("");
       setServings(2);
       setIngredients([{ name: "", quantity: "" }]);
       setOpen(false);
@@ -539,6 +594,17 @@ function RecipeDialog() {
                 onChange={(e) => setServings(Number(e.target.value))}
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="r-inst">Zubereitung</Label>
+            <Textarea
+              id="r-inst"
+              placeholder="optional – Schritte, Tipps …"
+              rows={3}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">

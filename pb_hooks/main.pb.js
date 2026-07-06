@@ -1,8 +1,11 @@
 /// <reference path="../pb_data/types.d.ts" />
 // ============================================================================
 // Plan – Server-Logik (ersetzt die früheren Supabase-RPCs & Edge Function)
-//  • POST /api/plan/redeem-invite  → Einladungs-Code einlösen
-//  • GET  /ics/:token              → abonnierbarer Kalender-Feed (.ics)
+//  • POST /api/plan/redeem-invite       → Einladungs-Code einlösen
+//  • GET  /ics/:token                   → abonnierbarer Kalender-Feed (.ics)
+//  • POST /api/plan/shortcut/add        → Artikel per Apple-Kurzbefehl/Siri
+//  • GET  /api/plan/shortcut/open       → offene Artikel (für Erinnerungen)
+//  • POST /api/plan/import-recipe-url   → Rezept von Website importieren
 // ============================================================================
 
 // ---- Einladungs-Code einlösen → Mitglied werden ----------------------------
@@ -54,6 +57,194 @@ routerAdd(
     }
 
     return c.json(200, { household_id: householdId });
+  },
+  $apis.requireRecordAuth(),
+);
+
+// ---- Kurzbefehle-API (Apple Shortcuts / Siri) -------------------------------
+// Absicherung über das geheime ics_token des Haushalts – kein Login nötig,
+// damit die Kurzbefehle einfach bleiben. Das Token kennt nur der Haushalt.
+// Gemeinsame Helfer liegen in plan_utils.js (Handler laufen in isolierten
+// VM-Kontexten und sehen keine Funktionen auf Dateiebene).
+
+// Artikel zur Einkaufsliste hinzufügen.
+// Body (JSON) oder Query: token, name, quantity (optional), list (optional:
+// Name der Ziel-Liste; sonst die älteste Liste des Haushalts).
+routerAdd("POST", "/api/plan/shortcut/add", (c) => {
+  const { findHouseholdByToken } = require(`${__hooks}/plan_utils.js`);
+  const info = $apis.requestInfo(c);
+  const p = (key) =>
+    String((info.data && info.data[key]) || c.queryParam(key) || "").trim();
+
+  const household = findHouseholdByToken(p("token"));
+  const name = p("name").slice(0, 200);
+  if (!name) throw new BadRequestError("Bitte einen Artikelnamen angeben.");
+
+  // Ziel-Liste bestimmen (benannt oder älteste); ohne Liste eine anlegen.
+  const lists = $app
+    .dao()
+    .findRecordsByFilter("shopping_lists", "household_id = {:h}", "created", 100, 0, {
+      h: household.id,
+    });
+  let list = null;
+  const wanted = p("list").toLowerCase();
+  if (wanted) {
+    list = lists.find((l) => l.getString("name").toLowerCase() === wanted) || null;
+    if (!list) throw new NotFoundError("Liste „" + p("list") + "“ nicht gefunden.");
+  } else if (lists.length > 0) {
+    list = lists[0];
+  } else {
+    const col = $app.dao().findCollectionByNameOrId("shopping_lists");
+    list = new Record(col);
+    list.set("household_id", household.id);
+    list.set("name", "Einkauf");
+    $app.dao().saveRecord(list);
+  }
+
+  const itemsCol = $app.dao().findCollectionByNameOrId("shopping_items");
+  const item = new Record(itemsCol);
+  item.set("household_id", household.id);
+  item.set("list_id", list.id);
+  item.set("name", name);
+  item.set("quantity", p("quantity").slice(0, 50));
+  item.set("is_checked", false);
+  $app.dao().saveRecord(item);
+
+  if (p("format") === "text") {
+    return c.string(200, name + " → " + list.getString("name"));
+  }
+  return c.json(200, { ok: true, item: name, list: list.getString("name") });
+});
+
+// Offene Artikel abrufen (für den „Nach Erinnerungen übertragen"-Kurzbefehl).
+// Query: token, format=json|text (Standard: json)
+routerAdd("GET", "/api/plan/shortcut/open", (c) => {
+  const { findHouseholdByToken } = require(`${__hooks}/plan_utils.js`);
+  const household = findHouseholdByToken(String(c.queryParam("token") || "").trim());
+
+  const items = $app
+    .dao()
+    .findRecordsByFilter(
+      "shopping_items",
+      "household_id = {:h} && is_checked = false",
+      "list_id,position,created",
+      500,
+      0,
+      { h: household.id },
+    );
+
+  const listName = {};
+  $app
+    .dao()
+    .findRecordsByFilter("shopping_lists", "household_id = {:h}", "", 100, 0, {
+      h: household.id,
+    })
+    .forEach((l) => {
+      listName[l.id] = l.getString("name");
+    });
+
+  const rows = items.map((i) => ({
+    name: i.getString("name"),
+    quantity: i.getString("quantity"),
+    list: listName[i.getString("list_id")] || "",
+  }));
+
+  if (String(c.queryParam("format")) === "text") {
+    const lines = rows.map((r) => (r.quantity ? r.name + " (" + r.quantity + ")" : r.name));
+    return c.string(200, lines.join("\n"));
+  }
+  return c.json(200, rows);
+});
+
+// ---- Rezept von einer Website importieren (schema.org JSON-LD) --------------
+routerAdd(
+  "POST",
+  "/api/plan/import-recipe-url",
+  (c) => {
+    const { extractRecipeJsonLd } = require(`${__hooks}/plan_utils.js`);
+    const info = $apis.requestInfo(c);
+    const user = info.authRecord;
+    if (!user) throw new ForbiddenError("Nicht angemeldet.");
+
+    const url = String((info.data && info.data.url) || "").trim();
+    const householdId = String((info.data && info.data.household_id) || "").trim();
+    if (!/^https?:\/\//i.test(url)) throw new BadRequestError("Bitte einen gültigen Link angeben.");
+    if (!householdId) throw new BadRequestError("household_id fehlt.");
+
+    // Nur Mitglieder dürfen in den Haushalt importieren.
+    try {
+      $app
+        .dao()
+        .findFirstRecordByFilter("household_members", "household_id = {:h} && user_id = {:u}", {
+          h: householdId,
+          u: user.id,
+        });
+    } catch (e) {
+      throw new ForbiddenError("Kein Mitglied dieses Haushalts.");
+    }
+
+    let res;
+    try {
+      res = $http.send({
+        url: url,
+        method: "GET",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; PlanApp/1.0)" },
+        timeout: 20,
+      });
+    } catch (e) {
+      throw new BadRequestError("Seite konnte nicht geladen werden.");
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw new BadRequestError("Seite konnte nicht geladen werden (HTTP " + res.statusCode + ").");
+    }
+
+    const recipeData = extractRecipeJsonLd(res.raw);
+    if (!recipeData) {
+      throw new BadRequestError(
+        "Auf dieser Seite wurden keine strukturierten Rezeptdaten gefunden.",
+      );
+    }
+
+    // Rezept anlegen
+    const recipesCol = $app.dao().findCollectionByNameOrId("recipes");
+    const recipe = new Record(recipesCol);
+    recipe.set("household_id", householdId);
+    recipe.set("title", recipeData.title);
+    recipe.set("description", recipeData.description);
+    recipe.set("instructions", recipeData.instructions);
+    recipe.set("servings", recipeData.servings || 2);
+    recipe.set("link", url);
+    recipe.set("prep_time", recipeData.prepTime);
+    recipe.set("cook_time", recipeData.cookTime);
+    recipe.set("total_time", recipeData.totalTime);
+    $app.dao().saveRecord(recipe);
+
+    // Foto (optional, Fehler ignorieren)
+    if (recipeData.image) {
+      try {
+        const file = $filesystem.fileFromUrl(recipeData.image, 15);
+        const form = new RecordUpsertForm($app, recipe);
+        form.addFiles("image", file);
+        form.submit();
+      } catch (e) {
+        /* Rezept bleibt ohne Bild */
+      }
+    }
+
+    // Zutaten anlegen
+    const ingsCol = $app.dao().findCollectionByNameOrId("recipe_ingredients");
+    let count = 0;
+    recipeData.ingredients.forEach((line) => {
+      const ing = new Record(ingsCol);
+      ing.set("household_id", householdId);
+      ing.set("recipe_id", recipe.id);
+      ing.set("name", line.slice(0, 300));
+      ing.set("quantity", "");
+      $app.dao().saveRecord(ing);
+      count++;
+    });
+
+    return c.json(200, { id: recipe.id, title: recipeData.title, ingredients: count });
   },
   $apis.requireRecordAuth(),
 );

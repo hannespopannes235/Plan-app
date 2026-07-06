@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Check, LogOut, UserPlus, Plus, Trash2 } from "lucide-react";
+import { Copy, Check, LogOut, UserPlus, Plus, Trash2, Zap } from "lucide-react";
 import { pb } from "@/lib/pocketbase";
 import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
@@ -208,6 +208,31 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Kurzbefehle / Siri */}
+      {activeHousehold && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" /> Kurzbefehle & Siri
+            </CardTitle>
+            <CardDescription>
+              Für Apple-Kurzbefehle: Artikel per Siri hinzufügen oder offene Artikel nach
+              Erinnerungen übertragen. Einrichtung: siehe Anleitung, Abschnitt „Kurzbefehle".
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ShortcutUrlRow
+              label="Artikel hinzufügen (POST)"
+              url={`${pb.baseUrl.replace(/\/$/, "")}/api/plan/shortcut/add?token=${activeHousehold.ics_token}`}
+            />
+            <ShortcutUrlRow
+              label="Offene Artikel abrufen (GET)"
+              url={`${pb.baseUrl.replace(/\/$/, "")}/api/plan/shortcut/open?token=${activeHousehold.ics_token}&format=text`}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Konto / Aktionen */}
       <Card>
         <CardHeader>
@@ -233,6 +258,43 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ShortcutUrlRow({ label, url }: { label: string; url: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "URL kopiert", variant: "success" });
+    } else {
+      toast({
+        title: "Kopieren nicht möglich",
+        description: "Markiere die URL und kopiere sie manuell.",
+        variant: "error",
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex gap-2">
+        <Input
+          readOnly
+          value={url}
+          className="font-mono text-xs"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <Button variant="outline" size="icon" onClick={copy} aria-label="URL kopieren">
+          {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+        </Button>
+      </div>
     </div>
   );
 }

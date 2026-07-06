@@ -5,7 +5,8 @@ Eine geräteübergreifende Haushalts-Organizer-App für Familien & WGs mit
 Alle Mitglieder teilen dieselben Daten – ändert jemand etwas, sehen es alle sofort.
 
 **Funktionen:** Einkaufslisten · Aufgaben/Putzplan · Essensplanung · Budget/Rechnungen ·
-In-App-Kalender mit abonnierbarem `.ics`-Feed.
+In-App-Kalender mit abonnierbarem `.ics`-Feed · Rezept-Import aus **Mela** & per Web-Link ·
+**Siri/Kurzbefehle**-Anbindung (Artikel diktieren, nach Erinnerungen übertragen).
 
 - 🇩🇪 Oberfläche komplett auf Deutsch
 - 🌗 Hell- & Dunkelmodus
@@ -127,6 +128,9 @@ Jede inhaltliche Collection hat ein `household_id`-Relationsfeld. Die
 Server-Logik in `pb_hooks/main.pb.js`:
 - `POST /api/plan/redeem-invite` – Einladungs-Code einlösen (Mitglied werden)
 - `GET /ics/:token` – abonnierbarer Kalender-Feed pro Haushalt
+- `POST /api/plan/shortcut/add` – Artikel per Apple-Kurzbefehl/Siri hinzufügen
+- `GET /api/plan/shortcut/open` – offene Artikel (für „Nach Erinnerungen übertragen")
+- `POST /api/plan/import-recipe-url` – Rezept von einer Website importieren (schema.org)
 
 ---
 

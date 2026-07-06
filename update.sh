@@ -5,7 +5,7 @@
 # Der Daten-Ordner pb_data bleibt dabei vollständig erhalten.
 #
 # Manuell aufrufen:   sudo sh /volume1/docker/plan/update.sh
-# Oder automatisch:   DSM → Aufgabenplaner (siehe docs/ANLEITUNG.md, Abschnitt 11).
+# Oder automatisch:   DSM → Aufgabenplaner (siehe docs/ANLEITUNG.md, Abschnitt 12).
 # ============================================================================
 set -e
 

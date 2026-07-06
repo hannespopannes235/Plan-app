@@ -23,10 +23,11 @@ das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
 6. [Auf dem Handy installieren](#6-auf-dem-handy-installieren)
 7. [Familie/WG einladen](#7-familiewg-einladen)
 8. [Kalender abonnieren](#8-kalender-abonnieren)
-9. [Von unterwegs erreichbar machen (HTTPS)](#9-von-unterwegs-erreichbar-machen-https)
-10. [Backups einrichten](#10-backups-einrichten)
-11. [Updates einspielen](#11-updates-einspielen)
-12. [Problembehebung](#12-problembehebung)
+9. [Siri & Apple Erinnerungen (Kurzbefehle)](#9-siri--apple-erinnerungen-kurzbefehle)
+10. [Von unterwegs erreichbar machen (HTTPS)](#10-von-unterwegs-erreichbar-machen-https)
+11. [Backups einrichten](#11-backups-einrichten)
+12. [Updates einspielen](#12-updates-einspielen)
+13. [Problembehebung](#13-problembehebung)
 
 ---
 
@@ -79,7 +80,7 @@ das Datenbank, Login und Echtzeit-Synchronisation mitbringt. Alles läuft in
 
 > 🧑‍💻 **Schneller per Git (optional):** Wer SSH hat (nächster Abschnitt), kann
 > direkt `git clone https://github.com/hannespopannes235/Plan-app.git /volume1/docker/plan`
-> ausführen – dann ist Abschnitt 11 Weg B (einfache Updates) auch gleich eingerichtet.
+> ausführen – dann ist Abschnitt 12 Weg B (einfache Updates) auch gleich eingerichtet.
 
 ---
 
@@ -219,7 +220,7 @@ Zugang für die Datenbank – nicht dein normales App-Konto).
 
 Plan ist eine **PWA**: Sie installiert sich direkt aus dem Browser, ganz ohne
 App Store. Voraussetzung: Das Handy ist im **selben WLAN** wie das NAS
-(für unterwegs siehe [Abschnitt 9](#9-von-unterwegs-erreichbar-machen-https)).
+(für unterwegs siehe [Abschnitt 10](#10-von-unterwegs-erreichbar-machen-https)).
 
 ### iPhone / iPad (Safari)
 1. Öffne in **Safari**: `http://NAS-IP:8090`
@@ -244,7 +245,7 @@ anklicken, fertig.
 > die App vollständig, und „Zum Home-Bildschirm" klappt auch. Die **Offline-Nutzung**
 > und automatische App-Updates im Hintergrund (der sogenannte „Service Worker")
 > aktivieren sich aber erst, wenn du die App über eine **HTTPS-Adresse** öffnest.
-> Wer das möchte, richtet einmalig [Variante B in Abschnitt 9](#9-von-unterwegs-erreichbar-machen-https)
+> Wer das möchte, richtet einmalig [Variante B in Abschnitt 10](#10-von-unterwegs-erreichbar-machen-https)
 > ein und installiert die App dann über `https://deinname.synology.me`.
 
 ---
@@ -275,11 +276,67 @@ gewohnten Kalender (Google/Apple):
 
 > 🔄 Der Kalender aktualisiert sich von selbst (je nach Anbieter alle paar Stunden).
 > Für den Zugriff von unterwegs muss das NAS von außen erreichbar sein
-> (siehe nächster Abschnitt).
+> (siehe [Abschnitt 10](#10-von-unterwegs-erreichbar-machen-https)).
 
 ---
 
-## 9. Von unterwegs erreichbar machen (HTTPS)
+## 9. Siri & Apple Erinnerungen (Kurzbefehle)
+
+Plan lässt sich mit der vorinstallierten Apple-App **Kurzbefehle** verbinden.
+Damit gehen zwei Dinge:
+
+- **Per Siri hinzufügen:** „Hey Siri, Einkaufszettel" → du diktierst „Milch" →
+  der Artikel landet sofort in Plan (für alle Mitglieder sichtbar).
+- **Nach Erinnerungen übertragen:** Ein Tipp auf den Kurzbefehl kopiert alle
+  offenen Artikel in eine Liste der Erinnerungen-App.
+
+> ℹ️ **Vorab wissen:** Die Kurzbefehle erreichen das NAS nur im **Heim-WLAN**
+> (oder unterwegs per VPN/HTTPS, siehe Abschnitt 10). Die Übertragung nach
+> Erinnerungen ist eine **Momentaufnahme** – Abhaken in Erinnerungen wird
+> *nicht* zurück nach Plan synchronisiert. Die gemeinsame Echtzeit-Liste
+> bleibt die Plan-App selbst.
+
+**Die passenden URLs findest du in Plan unter Einstellungen → „Kurzbefehle & Siri"**
+(einfach kopieren und unten einsetzen).
+
+### 9a. Kurzbefehl „Einkaufszettel" (per Siri diktieren)
+
+1. Öffne die App **Kurzbefehle** auf dem iPhone → **+** (neuer Kurzbefehl).
+2. **Aktion hinzufügen** → suche **„Nach Eingabe fragen"** →
+   als Frage z. B. `Was soll auf die Einkaufsliste?` eintragen.
+3. **Aktion hinzufügen** → suche **„Inhalte von URL abrufen"**:
+   - Als URL die kopierte **„Artikel hinzufügen"-URL** aus Plan einfügen.
+   - Tippe auf den kleinen Pfeil ⌄ neben der URL:
+     - **Methode:** `POST`
+     - **Anfragetext:** `JSON` → **Neues Feld → Text**: Schlüssel `name`,
+       Wert = Variable **„Bereitgestellte Eingabe"** (über die Variablen-Leiste wählen).
+4. Oben auf den Namen tippen → **umbenennen** in `Einkaufszettel`.
+5. Fertig! Sag **„Hey Siri, Einkaufszettel"** – Siri fragt nach, du diktierst,
+   der Artikel erscheint sofort in Plan. (Der Kurzbefehl funktioniert auch als
+   Knopf auf dem Home-Bildschirm: lange auf den Kurzbefehl drücken → **Teilen →
+   Zum Home-Bildschirm**.)
+
+### 9b. Kurzbefehl „Nach Erinnerungen übertragen"
+
+1. **Kurzbefehle** → **+** (neuer Kurzbefehl).
+2. **Aktion hinzufügen** → **„Inhalte von URL abrufen"** → die kopierte
+   **„Offene Artikel abrufen"-URL** aus Plan einfügen (Methode bleibt `GET`).
+3. **Aktion hinzufügen** → **„Text trennen"** → trennen bei **„Neue Zeilen"**
+   (als Eingabe automatisch das Ergebnis der URL-Aktion).
+4. **Aktion hinzufügen** → **„Mit jedem Element wiederholen"**.
+5. **In die Wiederholung** eine Aktion **„Neue Erinnerung hinzufügen"** ziehen:
+   - Inhalt: Variable **„Element wiederholen"**
+   - Liste: deine gewünschte Erinnerungen-Liste (z. B. „Einkaufen").
+6. Umbenennen in `Nach Erinnerungen übertragen` – fertig.
+
+> 💡 Doppelte vermeiden: Der Kurzbefehl überträgt bei jedem Ausführen **alle**
+> offenen Artikel. Am besten die Erinnerungen-Liste vorher leeren oder den
+> Kurzbefehl nur gezielt nutzen (z. B. einmal vor dem Einkaufen, wenn jemand
+> ohne Plan-Zugang einkauft).
+
+---
+
+## 10. Von unterwegs erreichbar machen (HTTPS)
 
 Im Heim-WLAN funktioniert alles über `http://NAS-IP:8090`. Damit die App auch
 **unterwegs** läuft (und damit Kalender-Abos zuverlässig sind), gibt es zwei Wege:
@@ -318,7 +375,7 @@ Im Heim-WLAN funktioniert alles über `http://NAS-IP:8090`. Damit die App auch
 
 ---
 
-## 10. Backups einrichten
+## 11. Backups einrichten
 
 Alle Daten liegen in **einem** Ordner:
 ```
@@ -335,7 +392,7 @@ So sicherst du ihn automatisch:
 
 ---
 
-## 11. Updates einspielen
+## 12. Updates einspielen
 
 Bei einer neuen Version gibt es drei Wege – vom umständlich bis vollautomatisch.
 **Deine Daten in `pb_data` bleiben bei allen Wegen erhalten.**
@@ -413,7 +470,7 @@ So aktualisiert sich Plan z. B. **jeden Sonntagnacht** von selbst (setzt Weg B v
 
 ---
 
-## 12. Problembehebung
+## 13. Problembehebung
 
 **Docker nicht im Paket-Zentrum zu finden.**
 Suche genau nach „Docker" (mit großem D). Falls nicht verfügbar: DSM-Version
@@ -465,7 +522,7 @@ Schau nach der ersten roten Zeile im Protokoll. Wenn dort etwas zu
 
 **Änderungen erscheinen nicht sofort auf anderen Geräten (Echtzeit).**
 - Bei Zugriff über die HTTPS-Domain: im Reverse Proxy **WebSocket aktivieren**
-  (siehe Abschnitt 9, Variante B, Schritt 3).
+  (siehe Abschnitt 10, Variante B, Schritt 3).
 - Die App holt Daten auch ohne Echtzeit beim erneuten Öffnen nach.
 
 **Passwort vergessen (App-Konto).**

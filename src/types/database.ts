@@ -73,6 +73,13 @@ export interface Recipe extends BaseRecord {
   title: string;
   description: string | null;
   servings: number;
+  instructions: string;
+  link: string;
+  prep_time: string;
+  cook_time: string;
+  total_time: string;
+  /** Dateiname des Rezeptfotos (PocketBase-file-Feld), leer wenn keins. */
+  image: string;
 }
 
 export interface RecipeIngredient extends BaseRecord {
