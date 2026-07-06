@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { BrandMark } from "@/components/BrandMark";
 import { Spinner } from "@/components/common";
 
 type Mode = "signin" | "signup";
@@ -42,9 +43,7 @@ export function Login() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-secondary/60 to-background p-4">
       <div className="mb-8 flex flex-col items-center text-center">
-        <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary text-3xl shadow-soft">
-          📋
-        </div>
+        <BrandMark className="mb-3 h-16 w-16 rounded-3xl text-3xl shadow-soft" />
         <h1 className="text-3xl font-bold tracking-tight">Plan</h1>
         <p className="mt-1 text-muted-foreground">Euer Haushalt – gemeinsam organisiert.</p>
       </div>

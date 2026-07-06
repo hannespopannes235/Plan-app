@@ -9,7 +9,6 @@ import {
   Receipt,
 } from "lucide-react";
 import { pb } from "@/lib/pocketbase";
-import { useAuth } from "@/hooks/useAuth";
 import { useHousehold } from "@/hooks/useHousehold";
 import { MEAL_SLOT_LABELS } from "@/lib/constants";
 import { toISODate, formatCurrency } from "@/lib/utils";
@@ -18,11 +17,9 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageLoader } from "@/components/common";
 
 export function Dashboard() {
-  const { user } = useAuth();
   const { activeId, profiles, members } = useHousehold();
   const today = toISODate(new Date());
   const month = today.slice(0, 7);
-  const myName = user ? profiles[user.id]?.display_name : null;
 
   const summary = useQuery({
     queryKey: ["dashboard", activeId, today],
@@ -79,21 +76,11 @@ export function Dashboard() {
   if (summary.isLoading || !summary.data) return <PageLoader />;
   const d = summary.data;
 
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 11) return "Guten Morgen";
-    if (h < 18) return "Hallo";
-    return "Guten Abend";
-  })();
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {greeting}
-            {myName ? `, ${myName}` : ""} 👋
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">Übersicht</h1>
           <p className="text-sm text-muted-foreground">
             {new Date().toLocaleDateString("de-DE", {
               weekday: "long",
@@ -113,28 +100,24 @@ export function Dashboard() {
         <StatCard
           to="/einkauf"
           icon={<ShoppingCart className="h-5 w-5" />}
-          color="#3b82f6"
           value={d.openItemsCount}
           label="offene Artikel"
         />
         <StatCard
           to="/aufgaben"
           icon={<CheckSquare className="h-5 w-5" />}
-          color="#10b981"
           value={d.todayTasks.length}
           label="Aufgaben heute"
         />
         <StatCard
           to="/budget"
           icon={<Wallet className="h-5 w-5" />}
-          color="#f59e0b"
           value={formatCurrency(d.monthTotal)}
           label="Ausgaben diesen Monat"
         />
         <StatCard
           to="/essensplan"
           icon={<UtensilsCrossed className="h-5 w-5" />}
-          color="#ec4899"
           value={d.todayMeals.length}
           label="Mahlzeiten heute"
         />
@@ -198,13 +181,11 @@ export function Dashboard() {
 function StatCard({
   to,
   icon,
-  color,
   value,
   label,
 }: {
   to: string;
   icon: React.ReactNode;
-  color: string;
   value: React.ReactNode;
   label: string;
 }) {
@@ -212,13 +193,10 @@ function StatCard({
     <Link to={to}>
       <Card className="transition-transform active:scale-[0.98]">
         <CardContent className="flex flex-col gap-1 py-4">
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl"
-            style={{ backgroundColor: `${color}22`, color }}
-          >
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
             {icon}
           </span>
-          <span className="mt-1 text-2xl font-bold leading-none">{value}</span>
+          <span className="mt-1 font-display text-2xl font-bold leading-none">{value}</span>
           <span className="text-xs text-muted-foreground">{label}</span>
         </CardContent>
       </Card>

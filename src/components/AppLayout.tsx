@@ -9,6 +9,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/BrandMark";
 import { HouseholdSwitcher } from "@/components/HouseholdSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -29,8 +30,8 @@ export function AppLayout() {
       {/* Desktop-Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border bg-card/60 px-3 py-5 backdrop-blur lg:flex">
         <div className="flex items-center gap-2 px-3 pb-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-lg">📋</div>
-          <span className="text-xl font-bold tracking-tight">Plan</span>
+          <BrandMark />
+          <span className="font-display text-xl font-bold tracking-tight">Plan</span>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">

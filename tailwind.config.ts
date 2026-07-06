@@ -52,7 +52,8 @@ export default {
         sm: "calc(var(--radius) - 8px)",
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["Inter Variable", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Bricolage Grotesque Variable", "Inter Variable", "system-ui", "sans-serif"],
       },
       boxShadow: {
         soft: "0 4px 24px -8px rgb(0 0 0 / 0.12)",

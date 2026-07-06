@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BrandMark } from "@/components/BrandMark";
 import { Spinner } from "@/components/common";
 
 export function Onboarding() {
@@ -36,7 +37,7 @@ export function Onboarding() {
       });
       setActiveId(household.id);
       await refetchHouseholds();
-      toast({ title: "Haushalt erstellt 🎉", variant: "success" });
+      toast({ title: "Haushalt erstellt", variant: "success" });
     } catch (err) {
       toast({
         title: "Konnte Haushalt nicht erstellen",
@@ -58,7 +59,7 @@ export function Onboarding() {
       });
       if (res?.household_id) setActiveId(res.household_id);
       await refetchHouseholds();
-      toast({ title: "Willkommen im Haushalt! 👋", variant: "success" });
+      toast({ title: "Willkommen im Haushalt", variant: "success" });
     } catch (err: any) {
       toast({
         title: "Beitritt fehlgeschlagen",
@@ -73,9 +74,7 @@ export function Onboarding() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-b from-secondary/60 to-background p-4">
       <div className="text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-primary text-2xl shadow-soft">
-          📋
-        </div>
+        <BrandMark className="mx-auto mb-3 h-14 w-14 rounded-3xl text-2xl shadow-soft" />
         <h1 className="text-2xl font-bold">Los geht's</h1>
         <p className="mt-1 text-muted-foreground">
           Erstelle einen Haushalt oder tritt einem bestehenden bei.

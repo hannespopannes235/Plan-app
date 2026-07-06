@@ -151,7 +151,7 @@ function WeekPlan() {
     onSuccess: (count) => {
       qc.invalidateQueries({ queryKey: ["shopping_lists", activeId] });
       toast({
-        title: "Einkaufsliste erstellt 🛒",
+        title: "Einkaufsliste erstellt",
         description: `${count} Zutaten übernommen.`,
         variant: "success",
       });

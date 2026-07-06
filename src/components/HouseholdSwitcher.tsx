@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Home, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useHousehold } from "@/hooks/useHousehold";
@@ -11,7 +11,9 @@ export function HouseholdSwitcher() {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-lg">🏠</div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+          <Home className="h-4 w-4" />
+        </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-tight">
             {activeHousehold?.name ?? "Haushalt"}

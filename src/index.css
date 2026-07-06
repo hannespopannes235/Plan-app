@@ -80,6 +80,11 @@
     /* Safe-Area für PWA auf iOS */
     padding-bottom: env(safe-area-inset-bottom);
   }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
 }
 
 @layer utilities {
