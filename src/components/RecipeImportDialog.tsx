@@ -47,12 +47,22 @@ export function RecipeImportDialog() {
 
       let created = 0;
       let skipped = 0;
+      let imagesFailed = 0;
       for (const r of parsed) {
         if (have.has(r.title.trim().toLowerCase())) {
           skipped++;
           continue;
         }
+        // Rezept zuerst ohne Foto anlegen: ein zu großes/unpassendes Bild
+        // soll nicht den ganzen Import blockieren.
         const recipe = await createRecipe(activeId!, r);
+        if (r.image) {
+          try {
+            await attachImage(recipe.id, r.image);
+          } catch {
+            imagesFailed++;
+          }
+        }
         // sequenziell, damit die Zutaten-Reihenfolge des Rezepts erhalten bleibt
         for (const ing of r.ingredients) {
           await pb.collection("recipe_ingredients").create({
@@ -66,21 +76,25 @@ export function RecipeImportDialog() {
         have.add(r.title.trim().toLowerCase());
         created++;
       }
-      return { created, skipped };
+      return { created, skipped, imagesFailed };
     },
-    onSuccess: ({ created, skipped }) => {
+    onSuccess: ({ created, skipped, imagesFailed }) => {
       invalidate();
       setOpen(false);
+      const notes = [
+        skipped > 0 ? `${skipped} übersprungen (Titel schon vorhanden)` : null,
+        imagesFailed > 0 ? `${imagesFailed} Foto${imagesFailed === 1 ? "" : "s"} übersprungen` : null,
+      ].filter(Boolean);
       toast({
         title: created > 0 ? `${created} Rezept${created === 1 ? "" : "e"} importiert` : "Nichts importiert",
-        description: skipped > 0 ? `${skipped} übersprungen (Titel schon vorhanden).` : undefined,
+        description: notes.length > 0 ? notes.join(", ") + "." : undefined,
         variant: created > 0 ? "success" : "error",
       });
     },
     onError: (e) =>
       toast({
         title: "Import fehlgeschlagen",
-        description: e instanceof Error ? e.message : String(e),
+        description: describeError(e),
         variant: "error",
       }),
   });
@@ -102,10 +116,9 @@ export function RecipeImportDialog() {
       });
     },
     onError: (e: unknown) => {
-      const err = e as { response?: { message?: string }; message?: string };
       toast({
         title: "Import fehlgeschlagen",
-        description: err?.response?.message || err?.message || "Link prüfen.",
+        description: describeError(e),
         variant: "error",
       });
     },
@@ -193,18 +206,36 @@ export function RecipeImportDialog() {
 }
 
 async function createRecipe(householdId: string, r: ParsedMelaRecipe): Promise<Recipe> {
+  return pb.collection("recipes").create<Recipe>({
+    household_id: householdId,
+    title: r.title,
+    description: r.description,
+    servings: r.servings ?? 2,
+    instructions: r.instructions,
+    link: r.link,
+    prep_time: r.prepTime,
+    cook_time: r.cookTime,
+    total_time: r.totalTime,
+  });
+}
+
+async function attachImage(recipeId: string, image: Blob): Promise<void> {
   const fd = new FormData();
-  fd.set("household_id", householdId);
-  fd.set("title", r.title);
-  fd.set("description", r.description);
-  fd.set("servings", String(r.servings ?? 2));
-  fd.set("instructions", r.instructions);
-  fd.set("link", r.link);
-  fd.set("prep_time", r.prepTime);
-  fd.set("cook_time", r.cookTime);
-  fd.set("total_time", r.totalTime);
-  if (r.image) {
-    fd.set("image", r.image, r.image.type === "image/png" ? "rezept.png" : "rezept.jpg");
+  fd.set("image", image, image.type === "image/png" ? "rezept.png" : "rezept.jpg");
+  await pb.collection("recipes").update(recipeId, fd);
+}
+
+/** Lesbare Fehlermeldung aus einem PocketBase-ClientResponseError ziehen. */
+function describeError(e: unknown): string {
+  const err = e as {
+    data?: { message?: string; data?: Record<string, { message?: string }> };
+    message?: string;
+  };
+  const fieldErrors = err?.data?.data;
+  if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+    return Object.entries(fieldErrors)
+      .map(([field, info]) => `${field}: ${info?.message ?? "ungültig"}`)
+      .join(" · ");
   }
-  return pb.collection("recipes").create<Recipe>(fd);
+  return err?.data?.message || err?.message || String(e);
 }
